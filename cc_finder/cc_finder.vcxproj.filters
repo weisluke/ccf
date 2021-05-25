@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{61486228-ce67-4829-8282-bef3ec5a5d67}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{aa13e6e6-1eee-49da-8218-70242b28a05e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="parse.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="main.cu">
+      <Filter>src</Filter>
+    </CudaCompile>
+    <CudaCompile Include="ccf_microlensing.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
+    <CudaCompile Include="ccf_read_write_files.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
+    <CudaCompile Include="complex.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
+    <CudaCompile Include="random_star_field.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
+    <CudaCompile Include="star.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="parse.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" />
+  </ItemGroup>
+</Project>

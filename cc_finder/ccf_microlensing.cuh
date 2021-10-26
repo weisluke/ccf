@@ -119,8 +119,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, star<T>* sta
 
 	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (2.0 * (1.0 - kappasmooth) - f0.abs())) < 0.000000001 &&
-		fabs(f0.abs() * (-2.0 * (1.0 - kappasmooth) - f0.abs())) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2.0 * (1.0 - kappasmooth))) < 0.000000001 &&
+		fabs(f0.abs() * (f0.abs() - 2.0 * (1.0 - kappasmooth))) < 0.000000001)
 	{
 		return z;
 	}
@@ -227,7 +227,7 @@ __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T k
 			result = find_critical_curve_root<T>(ipos, roots[(nphi / 2 + sgn * j) * nroots + ipos], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi, &(roots[(nphi / 2 + sgn * j) * nroots]), nroots);
 
 			/*distance between old root and new root in units of theta_e*/
-			norm = (result - roots[(nphi / 2 + sgn * j) * nroots + ipos] / theta).abs();
+			norm = (result - roots[(nphi / 2 + sgn * j) * nroots + ipos]).abs() / theta;
 
 			/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
 			if (norm < 0.000000001)

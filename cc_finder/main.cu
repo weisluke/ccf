@@ -68,7 +68,6 @@ double mean_squared_mass = 1.0;
 BEGIN structure definitions and function forward declarations
 ************************************************************/
 
-
 /************************************
 Print the program usage help message
 

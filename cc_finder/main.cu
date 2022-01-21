@@ -24,8 +24,7 @@ Email: weisluke@alum.mit.edu
 
 
 /*constants to be used*/
-constexpr double PI = 3.1415926535898;
-constexpr int OPTS_SIZE = 2 * 11;
+constexpr int OPTS_SIZE = 2 * 12;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -34,6 +33,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-s", "--shear",
 	"-t", "--theta_e",
 	"-np", "--num_phi",
+	"-nb", "--num_branches",
 	"-ns", "--num_stars",
 	"-rs", "--random_seed",
 	"-sf", "--starfile",
@@ -48,6 +48,7 @@ double kappa_smooth = 0.03;
 double shear = 0.3;
 double theta_e = 1.0;
 int num_phi = 50;
+int num_branches = 1;
 int num_stars = 137;
 int random_seed = 0;
 std::string starfile = "";
@@ -221,6 +222,23 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
+		else if (argv[i] == std::string("-nb") || argv[i] == std::string("--num_branches"))
+		{
+			if (validDouble(cmdinput))
+			{
+				num_branches = static_cast<int>(std::strtod(cmdinput, nullptr));
+				if (num_branches < 1)
+				{
+					std::cerr << "Error. Invalid num_branches input. num_branches must be an integer > 0\n";
+					return -1;
+				}
+			}
+			else
+			{
+				std::cerr << "Error. Invalid num_branches input.\n";
+				return -1;
+			}
+		}
 		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
 		{
 			if (validDouble(cmdinput))
@@ -267,6 +285,12 @@ int main(int argc, char* argv[])
 		{
 			outfile_prefix = cmdinput;
 		}
+	}
+
+	if (num_phi % (2 * num_branches) != 0)
+	{
+		std::cerr << "Error. Invalid num_phi input. num_phi must be a multiple of 2*num_branches\n";
+		return -1;
 	}
 
 	/****************************************************************************
@@ -335,7 +359,7 @@ int main(int argc, char* argv[])
 	if (CUDAError("cudaMallocManaged(*ccs)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold t/f values of whether or not roots have been found to desired precision*/
-	cudaMallocManaged(&fin, 2 * num_roots * sizeof(bool));
+	cudaMallocManaged(&fin, num_branches * 2 * num_roots * sizeof(bool));
 	if (CUDAError("cudaMallocManaged(*fin)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold root errors*/
@@ -405,29 +429,47 @@ int main(int argc, char* argv[])
 	*has_nan = 0;
 
 	/*initialize roots for phi=pi to lie at starpos +/- 1*/
-	for (int i = 0; i < num_stars; i++)
+	for (int j = 0; j < num_branches; j++)
 	{
-		ccs_init[num_phi / 2 * num_roots + i] = stars[i].position + 1.0;
-		ccs_init[num_phi / 2 * num_roots + i + num_stars] = stars[i].position - 1.0;
+		for (int i = 0; i < num_stars; i++)
+		{
+			int index = (num_phi / (2 * num_branches) + j * num_phi / num_branches) * num_roots;
+			ccs_init[index + i ] = stars[i].position + 1.0;
+			ccs_init[index + i + num_stars] = stars[i].position - 1.0;
+		}
 	}
 
 	/*initialize values of whether roots have been found to false
-	twice the number of roots for a single value of phi, because we
-	will be growing roots for two values of phi simultaneously as we
-	traverse pi->0 and pi->2pi*/
-	for (int i = 0; i < 2 * num_roots; i++)
+	twice the number of roots for a single value of phi, times the
+	number of branches, because we will be growing roots for two
+	values of phi simultaneously for each branch*/
+	for (int i = 0; i < num_branches * 2 * num_roots; i++)
 	{
 		fin[i] = false;
 	}
 
+	for (int i = 0; i < (num_phi + 1) * num_roots; i++)
+	{
+		errs[i] = 0.0;
+	}
+
 	/*number of threads per block, and number of blocks per grid
 	uses empirical optimum values for maximum number of threads and blocks*/
-	int numThreads = 256;
-	int numBlocks = (2 * num_roots - 1) / numThreads + 1;
-	if (numBlocks > 32768 || numBlocks < 1)
+	
+	int numThreads_x = 128;
+	int numThreads_y = num_branches;
+	int numBlocks_x = static_cast<int>((2 * num_roots - 1) / numThreads_x) + 1;
+	if (numBlocks_x > 32768 || numBlocks_x < 1)
 	{
-		numBlocks = 32768;
+		numBlocks_x = 32768;
 	}
+	int numBlocks_y = static_cast<int>((num_branches - 1) / numThreads_y) + 1;
+	if (numBlocks_y > 32768 || numBlocks_y < 1)
+	{
+		numBlocks_y = 32768;
+	}
+	dim3 blocks(numBlocks_x, numBlocks_y);
+	dim3 threads(numThreads_x, numThreads_y);
 
 
 	/*number of iterations to use for root finding
@@ -455,7 +497,7 @@ int main(int argc, char* argv[])
 		print_progress(i, num_iters - 1);
 
 		/*start kernel and perform error checking*/
-		find_critical_curve_roots_kernel<double> << < numBlocks, numThreads >> > (stars, num_stars, kappa_smooth, shear, theta_e, PI, 0.0, ccs_init, num_roots, 0, num_phi, fin);
+		find_critical_curve_roots_kernel<double> << < blocks, threads >> > (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (CUDAError("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 
@@ -467,10 +509,10 @@ int main(int argc, char* argv[])
 
 
 	/*calculate errors in 1/mu for initial roots*/
-	find_errors_kernel<double> << < numBlocks, numThreads >> > (&(ccs_init[num_phi / 2 * num_roots]), num_roots, stars, num_stars, kappa_smooth, shear, theta_e, PI, errs);
+	find_errors_kernel<double> << < blocks, threads >> > (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, 0, num_phi, num_branches, errs);
 	if (CUDAError("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
-	has_nan_err_kernel<double> << < numBlocks, numThreads >> > (errs, num_roots, has_nan);
+	has_nan_err_kernel<double> << < blocks, threads >> > (errs, (num_phi + 1) * num_roots, has_nan);
 	if (CUDAError("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -480,7 +522,7 @@ int main(int argc, char* argv[])
 	}
 
 	/*find max error and print*/
-	int num_errs = num_roots;
+	int num_errs = (num_phi + 1) * num_roots;
 	while (num_errs > 1)
 	{
 		if (num_errs % 2 != 0)
@@ -489,7 +531,7 @@ int main(int argc, char* argv[])
 			num_errs -= 1;
 		}
 		num_errs /= 2;
-		max_err_kernel<double> << < numBlocks, numThreads >> > (errs, num_errs);
+		max_err_kernel<double> << < blocks, threads >> > (errs, num_errs);
 		if (CUDAError("max_err_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 	double max_error = errs[0];
@@ -508,18 +550,18 @@ int main(int argc, char* argv[])
 	we use num_phi/2 steps, as we will be working our way out
 	from the middle of the array of roots towards the two endpoints
 	simultaneously (i.e., from phi=pi to phi=0 and phi=2pi simultaneously)*/
-	for (int i = 1; i <= num_phi / 2; i++)
+	for (int i = 1; i <= num_phi / (2 * num_branches); i++)
 	{
 
 		/*set critical curve array elements to be equal to last roots
 		reuse fin array for each set of phi roots*/
-		prepare_roots_kernel<double> << < numBlocks, numThreads >> > (ccs_init, num_roots, i, num_phi, fin);
+		prepare_roots_kernel<double> << < blocks, threads >> > (ccs_init, num_roots, i, num_phi, num_branches, fin);
 		if (CUDAError("prepare_roots_kernel", false, __FILE__, __LINE__)) return -1;
 
 		/*solve roots for current values of phi = pi +/- i*2pi/num_phi*/
 		for (int j = 0; j < num_iters; j++)
 		{
-			find_critical_curve_roots_kernel<double> << < numBlocks, numThreads >> > (stars, num_stars, kappa_smooth, shear, theta_e, PI, i * 2.0 * PI / num_phi, ccs_init, num_roots, i, num_phi, fin);
+			find_critical_curve_roots_kernel<double> << < blocks, threads >> > (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, i, num_phi, num_branches, fin);
 			if (CUDAError("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -528,11 +570,11 @@ int main(int argc, char* argv[])
 		one could move the synchronization call outside of the outer loop for a
 		slight speed-up, at the cost of not knowing how far along in the process
 		the computations have gone*/
-		if (i * 100 / (num_phi / 2) > (i - 1) * 100 / (num_phi / 2))
+		if (i * 100 / (num_phi / (2 * num_branches)) > (i - 1) * 100 / (num_phi / (2 * num_branches)))
 		{
 			cudaDeviceSynchronize();
 			if (CUDAError("cudaDeviceSynchronize", false, __FILE__, __LINE__)) return -1;
-			print_progress(i, num_phi / 2);
+			print_progress(i, num_phi / (2 * num_branches));
 		}
 	}
 
@@ -546,13 +588,13 @@ int main(int argc, char* argv[])
 
 	*has_nan = 0;
 
-	for (int i = 0; i <= num_phi; i++)
+	for (int i = 0; i <= num_phi / (2 * num_branches); i++)
 	{
-		find_errors_kernel<double> << < numBlocks, numThreads >> > (&(ccs_init[i * num_roots]), num_roots, stars, num_stars, kappa_smooth, shear, theta_e, i * 2.0 * PI / num_phi, &(errs[i * num_roots]));
+		find_errors_kernel<double> << < blocks, threads >> > (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, i, num_phi, num_branches, errs);
 		if (CUDAError("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
-	has_nan_err_kernel<double> << < numBlocks, numThreads >> > (errs, (num_phi + 1) * num_roots, has_nan);
+	has_nan_err_kernel<double> << < blocks, threads >> > (errs, (num_phi + 1) * num_roots, has_nan);
 	if (CUDAError("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -570,31 +612,23 @@ int main(int argc, char* argv[])
 			num_errs -= 1;
 		}
 		num_errs /= 2;
-		max_err_kernel<double> << < numBlocks, numThreads >> > (errs, num_errs);
+		max_err_kernel<double> << < blocks, threads >> > (errs, num_errs);
 		if (CUDAError("max_err_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 	max_error = errs[0];
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n";
 
 
-	/*reset number of blocks based on total size of critical curve array
-	in order to maximize parallelization when finding caustics*/
-	numBlocks = (num_roots * (num_phi + 1) - 1) / numThreads + 1;
-	if (numBlocks > 32768 || numBlocks < 1)
-	{
-		numBlocks = 32768;
-	}
-
 	std::cout << "\nTransposing critical curve array...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	transpose_array_kernel<double> << < numBlocks, numThreads >> > (ccs_init, (num_phi + 1), num_roots, ccs);
+	transpose_array_kernel<double> << < blocks, threads >> > (ccs_init, (num_phi + 1), num_roots, ccs);
 	if (CUDAError("transpose_array_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0 << " seconds.\n";
 
 	std::cout << "\nFinding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<double> << < numBlocks, numThreads >> > (ccs, (num_phi + 1) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
+	find_caustics_kernel<double> << < blocks, threads >> > (ccs, (num_phi + 1) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
 	if (CUDAError("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -629,6 +663,7 @@ int main(int argc, char* argv[])
 	outfile << "random_seed " << random_seed << "\n";
 	outfile << "num_roots " << num_roots << "\n";
 	outfile << "num_phi " << num_phi << "\n";
+	outfile << "num_branches " << num_branches << "\n";
 	outfile << "max_error_1/mu " << max_error << "\n";
 	outfile << "t_init_roots " << t_init_roots << "\n";
 	outfile << "t_ccs " << t_ccs << "\n";
@@ -728,8 +763,9 @@ void display_usage(char* name)
 		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
 		<< "                         star in arbitrary units. Default value: " << theta_e << "\n"
 		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
-		<< "                         range [0, 2*pi].\n"
-		<< "                         Default value: " << num_phi << "\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
+		<< "   -nb,--num_branches    Specify the number of branches to use in the range\n"
+		<< "                         [0, 2*pi]. Default value: " << num_branches << "\n"
 		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
 		<< "                         Default value: " << num_stars << "\n"
 		<< "                         All stars are taken to be of unit mass. If a range of\n"

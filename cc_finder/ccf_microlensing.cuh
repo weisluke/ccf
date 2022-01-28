@@ -4,7 +4,6 @@
 #include "star.cuh"
 
 
-
 /********************************************************************************
 lens equation
 
@@ -64,7 +63,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, star<T>* stars, in
 	starsum *= (theta * theta);
 
 	/*gamma-(1-kappa_smooth)*e^(-i*phi)+starsum*/
-	return starsum + gamma  - (1.0 - kappasmooth) * Complex<T>(cos(phi), -sin(phi));
+	return starsum + gamma - (1.0 - kappasmooth) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /*********************************************************************
@@ -150,9 +149,9 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, star<T>* sta
 }
 
 /*****************************************************************
-take the given value of j out of nphi steps, the list of all roots
-z, and set the initial roots for step j equal to the final roots
-of step j-1
+take the list of all roots z, the given value of j out of nphi
+steps, and the number of branches, and set the initial roots for
+step j equal to the final roots of step j-1
 reset values for whether roots have all been found to
 sufficient accuracy to false
 
@@ -160,17 +159,19 @@ sufficient accuracy to false
 \param nroots -- number of roots
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi
+\param nbranches -- total number of branches for phi in [0, 2*pi]
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
+			  array should be of size nbranches * 2 * nroots
 *****************************************************************/
 template <typename T>
 __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
+
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
-
 
 	for (int k = y_index; k < nbranches; k += y_stride)
 	{
@@ -194,20 +195,21 @@ find new critical curve roots
 \param kappasmooth -- smooth matter convergence
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
-\param phi0 -- value of the variable parametrizing z
-\param dphi -- used to find value of phi on either side of phi0
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi
+\param nbranches -- total number of branches for phi in [0, 2*pi]
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
+			  array should be of size nbranches * 2 * nroots
 *****************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
+
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
 
@@ -221,7 +223,7 @@ __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T k
 
 	for (int k = y_index; k < nbranches; k += y_stride)
 	{
-		T phi0 = PI * (1 + 2 * k) / nbranches;
+		T phi0 = PI / nbranches + k * 2.0 * PI / nbranches;
 
 		for (int i = x_index; i < 2 * nroots; i += x_stride)
 		{
@@ -233,16 +235,20 @@ __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T k
 			sgn = (i < nroots ? -1 : 1);
 			ipos = i % nroots;
 
-			/*if root has not already been calculated to desired precision*/
+			/*if root has not already been calculated to desired precision
+			we are calculating nbranches * 2 * nroots roots in parallel, so
+			k * 2 * nroots indicates what branch we are in, with " + i " then
+			indicating the particular root position*/
 			if (!fin[k * 2 * nroots + i])
 			{
 				/*calculate new root
-				center of the roots array for all phi values is (nphi/2)*nroots
+				center of the roots array (ie the index of phi0) for all branches is
+				( nphi / (2 * nbranches) + k  * nphi / nbranches ) * nroots
 				for the particular value of phi here (i.e., phi0 +/- dphi),
 				roots start at +/- j*nroots of that center
 				ipos is then added to get the final index of this particular root*/
-				int center = (nphi / (2 * nbranches) + k * nphi / nbranches) * nroots;
 
+				int center = (nphi / (2 * nbranches) + k * nphi / nbranches) * nroots;
 				result = find_critical_curve_root<T>(ipos, roots[center + sgn * j * nroots + ipos], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 				/*distance between old root and new root in units of theta_e*/
@@ -269,14 +275,18 @@ find maximum error in critical curve roots
 \param kappasmooth -- smooth matter convergence
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
-\param phi -- value of the variable parametrizing z
+\param j -- position in the number of steps used for phi
+\param nphi -- total number of steps used for phi
+\param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
+			   array should be of size nbranches * 2 * nroots
 **************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, int j, int nphi, int nbranches, T* errs)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
+
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
 
@@ -288,7 +298,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, star<T>* stars, in
 
 	for (int k = y_index; k < nbranches; k += y_stride)
 	{
-		T phi0 = PI * (1 + 2 * k) / nbranches;
+		T phi0 = PI / nbranches + k * 2.0 * PI / nbranches;
 
 		for (int i = x_index; i < 2 * nroots; i += x_stride)
 		{
@@ -321,10 +331,10 @@ determine whether errors have nan values
 template <typename T>
 __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 {
-	int index = blockIdx.x * blockDim.x + threadIdx.x;
-	int stride = blockDim.x * gridDim.x;
+	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = index; i < nerrs; i += stride)
+	for (int i = x_index; i < nerrs; i += x_stride)
 	{
 		if (!isfinite(errs[i]))
 		{
@@ -343,10 +353,10 @@ first half and corresponding partner in second half
 template <typename T>
 __global__ void max_err_kernel(T* errs, int nerrs)
 {
-	int index = blockIdx.x * blockDim.x + threadIdx.x;
-	int stride = blockDim.x * gridDim.x;
+	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = index; i < nerrs; i += stride)
+	for (int i = x_index; i < nerrs; i += x_stride)
 	{
 		errs[i] = fmax(errs[i], errs[i + nerrs]);
 	}
@@ -367,10 +377,10 @@ find caustics from critical curves
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, Complex<T>* w)
 {
-	int index = blockIdx.x * blockDim.x + threadIdx.x;
-	int stride = blockDim.x * gridDim.x;
+	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = index; i < nroots; i += stride)
+	for (int i = x_index; i < nroots; i += x_stride)
 	{
 		/*map image plane positions to source plane positions*/
 		w[i] = complex_image_to_source<T>(z[i], stars, nstars, kappasmooth, gamma, theta);
@@ -388,10 +398,10 @@ transpose array
 template <typename T>
 __global__ void transpose_array_kernel(Complex<T>* z1, int nrows, int ncols, Complex<T>* z2)
 {
-	int index = blockIdx.x * blockDim.x + threadIdx.x;
-	int stride = blockDim.x * gridDim.x;
+	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = index; i < nrows * ncols; i += stride)
+	for (int i = x_index; i < nrows * ncols; i += x_stride)
 	{
 		int col = i % ncols;
 		int row = (i - col) / ncols;

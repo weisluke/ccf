@@ -351,11 +351,11 @@ int main(int argc, char* argv[])
 	if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return -1;
 
 	/*allocate memory for array of critical curve positions*/
-	cudaMallocManaged(&ccs_init, (num_phi + 1) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&ccs_init, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
 	if (cuda_error("cudaMallocManaged(*ccs_init)", false, __FILE__, __LINE__)) return -1;
 
 	/*allocate memory for array of transposed critical curve positions*/
-	cudaMallocManaged(&ccs, (num_phi + 1) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&ccs, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
 	if (cuda_error("cudaMallocManaged(*ccs)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold t/f values of whether or not roots have been found to desired precision*/
@@ -363,11 +363,11 @@ int main(int argc, char* argv[])
 	if (cuda_error("cudaMallocManaged(*fin)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold root errors*/
-	cudaMallocManaged(&errs, (num_phi + 1) * num_roots * sizeof(double));
+	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(double));
 	if (cuda_error("cudaMallocManaged(*errs)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold caustic positions*/
-	cudaMallocManaged(&caustics, (num_phi + 1) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
 	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
 
 	/*variable to hold has_nan*/
@@ -433,7 +433,7 @@ int main(int argc, char* argv[])
 	{
 		for (int i = 0; i < num_stars; i++)
 		{
-			int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches) * num_roots;
+			int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
 			ccs_init[center + i ] = stars[i].position + 1.0;
 			ccs_init[center + i + num_stars] = stars[i].position - 1.0;
 		}
@@ -448,7 +448,7 @@ int main(int argc, char* argv[])
 		fin[i] = false;
 	}
 
-	for (int i = 0; i < (num_phi + 1) * num_roots; i++)
+	for (int i = 0; i < (num_phi + num_branches) * num_roots; i++)
 	{
 		errs[i] = 0.0;
 	}
@@ -457,7 +457,7 @@ int main(int argc, char* argv[])
 	uses empirical optimum values for maximum number of threads and blocks*/
 	
 	int num_threads_y = num_branches;
-	int num_threads_x = static_cast<int>(1024 / num_branches);
+	int num_threads_x = static_cast<int>(512 / num_threads_y);
 
 	int num_blocks_x = static_cast<int>((2 * num_roots - 1) / num_threads_x) + 1;
 	if (num_blocks_x > 32768 || num_blocks_x < 1)
@@ -513,7 +513,7 @@ int main(int argc, char* argv[])
 	find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
-	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + 1) * num_roots, has_nan);
+	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
 	if (cuda_error("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -523,7 +523,7 @@ int main(int argc, char* argv[])
 	}
 
 	/*find max error and print*/
-	int num_errs = (num_phi + 1) * num_roots;
+	int num_errs = (num_phi + num_branches) * num_roots;
 	while (num_errs > 1)
 	{
 		if (num_errs % 2 != 0)
@@ -540,7 +540,7 @@ int main(int argc, char* argv[])
 
 
 	/*reduce number of iterations needed, as roots should stay close to previous positions*/
-	num_iters = 25;
+	num_iters = 20;
 
 	/*begin finding critical curves*/
 	std::cout << "\nFinding critical curve positions...\n";
@@ -595,7 +595,7 @@ int main(int argc, char* argv[])
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
-	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + 1) * num_roots, has_nan);
+	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
 	if (cuda_error("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -604,7 +604,7 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	num_errs = (num_phi + 1) * num_roots;
+	num_errs = (num_phi + num_branches) * num_roots;
 	while (num_errs > 1)
 	{
 		if (num_errs % 2 != 0)
@@ -620,16 +620,31 @@ int main(int argc, char* argv[])
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n";
 
 
+	/*redefine thread and block size to maximize parallelization*/
+	num_threads_y = 1;
+	num_threads_x = static_cast<int>(1024 / num_threads_y);
+
+	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
+	if (num_blocks_x > 32768 || num_blocks_x < 1)
+	{
+		num_blocks_x = 32768;
+	}
+	num_blocks_y = 1;
+	blocks.x = num_blocks_x;
+	blocks.y = num_blocks_y;
+	threads.x = num_threads_x;
+	threads.y = num_threads_y;
+
 	std::cout << "\nTransposing critical curve array...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	transpose_array_kernel<double> <<<blocks, threads>>> (ccs_init, (num_phi + 1), num_roots, ccs);
+	transpose_array_kernel<double> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 	if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0 << " seconds.\n";
 
 	std::cout << "\nFinding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<double> <<<blocks, threads>>> (ccs, (num_phi + 1) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
+	find_caustics_kernel<double> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -685,13 +700,13 @@ int main(int argc, char* argv[])
 	std::cout << "\nWriting critical curve positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(ccs, num_roots, num_phi + 1, outfile_prefix + "ccf_ccs_pos_x" + outfile_type))
+		if (!write_re_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos_x" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs x info to file " << outfile_prefix << "ccf_ccs_pos_x" + outfile_type << "\n";
 			return -1;
 		}
 		std::cout << "Done writing critical curve x positions to file " << outfile_prefix << "ccf_ccs_pos_x" + outfile_type << "\n";
-		if (!write_im_array<double>(ccs, num_roots, num_phi + 1, outfile_prefix + "ccf_ccs_pos_y" + outfile_type))
+		if (!write_im_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos_y" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs y info to file " << outfile_prefix << "ccf_ccs_pos_y" + outfile_type << "\n";
 			return -1;
@@ -700,7 +715,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		if (!write_complex_array<double>(ccs, num_roots, num_phi + 1, outfile_prefix + "ccf_ccs_pos" + outfile_type))
+		if (!write_complex_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs info to file " << outfile_prefix << "ccf_ccs_pos" + outfile_type << "\n";
 			return -1;
@@ -713,13 +728,13 @@ int main(int argc, char* argv[])
 	std::cout << "\nWriting caustic positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(caustics, num_roots, num_phi + 1, outfile_prefix + "ccf_caustics_pos_x" + outfile_type))
+		if (!write_re_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos_x" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic x info to file " << outfile_prefix << "ccf_caustics_pos_x" + outfile_type << "\n";
 			return -1;
 		}
 		std::cout << "Done writing caustic x positions to file " << outfile_prefix << "ccf_caustics_pos_x" + outfile_type << "\n";
-		if (!write_im_array<double>(caustics, num_roots, num_phi + 1, outfile_prefix + "ccf_caustics_pos_y" + outfile_type))
+		if (!write_im_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos_y" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic y info to file " << outfile_prefix << "ccf_caustics_pos_y" + outfile_type << "\n";
 			return -1;
@@ -728,7 +743,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		if (!write_complex_array<double>(caustics, num_roots, num_phi + 1, outfile_prefix + "ccf_caustics_pos" + outfile_type))
+		if (!write_complex_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic info to file " << outfile_prefix << "ccf_caustics_pos" + outfile_type << "\n";
 			return -1;

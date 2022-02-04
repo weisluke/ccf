@@ -177,7 +177,7 @@ __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi,
 	{
 		for (int i = x_index; i < nroots; i += x_stride)
 		{
-			int center = (nphi / (2 * nbranches) + k * nphi / nbranches) * nroots;
+			int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
 
 			z[center + j * nroots + i] = z[center + (j - 1) * nroots + i];
 			z[center - j * nroots + i] = z[center - (j - 1) * nroots + i];
@@ -248,7 +248,7 @@ __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T k
 				roots start at +/- j*nroots of that center
 				ipos is then added to get the final index of this particular root*/
 
-				int center = (nphi / (2 * nbranches) + k * nphi / nbranches) * nroots;
+				int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
 				result = find_critical_curve_root<T>(ipos, roots[center + sgn * j * nroots + ipos], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 				/*distance between old root and new root in units of theta_e*/
@@ -305,7 +305,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, star<T>* stars, in
 			sgn = (i < nroots ? -1 : 1);
 			ipos = i % nroots;
 
-			int center = (nphi / (2 * nbranches) + k * nphi / nbranches) * nroots;
+			int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
 
 			/*the value of 1/mu depends on the value of f0
 			this calculation ensures that the maximum possible value of 1/mu is given*/

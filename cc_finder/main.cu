@@ -456,18 +456,18 @@ int main(int argc, char* argv[])
 	/*number of threads per block, and number of blocks per grid
 	uses empirical optimum values for maximum number of threads and blocks*/
 	
-	int num_threads_y = num_branches;
+	int num_threads_y = 1;
 	int num_threads_x = static_cast<int>(512 / num_threads_y);
 
+	int num_blocks_y = num_branches;
+	if (num_blocks_y > 32768 || num_blocks_y < 1)
+	{
+		num_blocks_y = 32768;
+	}
 	int num_blocks_x = static_cast<int>((2 * num_roots - 1) / num_threads_x) + 1;
 	if (num_blocks_x > 32768 || num_blocks_x < 1)
 	{
 		num_blocks_x = 32768;
-	}
-	int num_blocks_y = static_cast<int>((num_branches - 1) / num_threads_y) + 1;
-	if (num_blocks_y > 32768 || num_blocks_y < 1)
-	{
-		num_blocks_y = 32768;
 	}
 	dim3 blocks(num_blocks_x, num_blocks_y);
 	dim3 threads(num_threads_x, num_threads_y);
@@ -624,12 +624,13 @@ int main(int argc, char* argv[])
 	num_threads_y = 1;
 	num_threads_x = static_cast<int>(1024 / num_threads_y);
 
+	num_blocks_y = 1;
 	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
 	if (num_blocks_x > 32768 || num_blocks_x < 1)
 	{
 		num_blocks_x = 32768;
 	}
-	num_blocks_y = 1;
+
 	blocks.x = num_blocks_x;
 	blocks.y = num_blocks_y;
 	threads.x = num_threads_x;

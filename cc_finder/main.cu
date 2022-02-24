@@ -456,21 +456,19 @@ int main(int argc, char* argv[])
 	/*number of threads per block, and number of blocks per grid
 	uses empirical optimum values for maximum number of threads and blocks*/
 	
+	int num_threads_z = 1;
 	int num_threads_y = 1;
-	int num_threads_x = static_cast<int>(512 / num_threads_y);
+	int num_threads_x = 512;
 
-	int num_blocks_y = num_branches;
-	if (num_blocks_y > 32768 || num_blocks_y < 1)
-	{
-		num_blocks_y = 32768;
-	}
-	int num_blocks_x = static_cast<int>((2 * num_roots - 1) / num_threads_x) + 1;
+	int num_blocks_z = num_branches;
+	int num_blocks_y = 2;
+	int num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
 	if (num_blocks_x > 32768 || num_blocks_x < 1)
 	{
 		num_blocks_x = 32768;
 	}
-	dim3 blocks(num_blocks_x, num_blocks_y);
-	dim3 threads(num_threads_x, num_threads_y);
+	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
+	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
 
 
 	/*number of iterations to use for root finding
@@ -488,7 +486,7 @@ int main(int argc, char* argv[])
 	starttime = std::chrono::high_resolution_clock::now();
 
 	/*each iteration of this loop calculates updated positions
-	of all numroots roots in parallel
+	of all roots for the center of each branch in parallel
 	ideally, the number of loop iterations is enough to ensure that
 	all roots are found to the desired accuracy*/
 	for (int i = 0; i < num_iters; i++)
@@ -548,21 +546,20 @@ int main(int argc, char* argv[])
 	starttime = std::chrono::high_resolution_clock::now();
 
 	/*the outer loop will step through different values of phi
-	we use num_phi/2 steps, as we will be working our way out
-	from the middle of the array of roots towards the two endpoints
-	simultaneously (i.e., from phi=pi to phi=0 and phi=2pi simultaneously)*/
-	for (int i = 1; i <= num_phi / (2 * num_branches); i++)
+	we use num_phi/(2*num_branches) steps, as we will be working our way out
+	from the middle of each branch for the array of roots simultaneously*/
+	for (int j = 1; j <= num_phi / (2 * num_branches); j++)
 	{
 
 		/*set critical curve array elements to be equal to last roots
-		reuse fin array for each set of phi roots*/
-		prepare_roots_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, i, num_phi, num_branches, fin);
+		fin array is reused each time*/
+		prepare_roots_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, j, num_phi, num_branches, fin);
 		if (cuda_error("prepare_roots_kernel", false, __FILE__, __LINE__)) return -1;
 
-		/*solve roots for current values of phi = pi +/- i*2pi/num_phi*/
-		for (int j = 0; j < num_iters; j++)
+		/*solve roots for current values of j*/
+		for (int i = 0; i < num_iters; i++)
 		{
-			find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, i, num_phi, num_branches, fin);
+			find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, j, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -571,11 +568,11 @@ int main(int argc, char* argv[])
 		one could move the synchronization call outside of the outer loop for a
 		slight speed-up, at the cost of not knowing how far along in the process
 		the computations have gone*/
-		if (i * 100 / (num_phi / (2 * num_branches)) > (i - 1) * 100 / (num_phi / (2 * num_branches)))
+		if (j * 100 / (num_phi / (2 * num_branches)) > (j - 1) * 100 / (num_phi / (2 * num_branches)))
 		{
 			cudaDeviceSynchronize();
 			if (cuda_error("cudaDeviceSynchronize", false, __FILE__, __LINE__)) return -1;
-			print_progress(i, num_phi / (2 * num_branches));
+			print_progress(j, num_phi / (2 * num_branches));
 		}
 	}
 
@@ -587,11 +584,9 @@ int main(int argc, char* argv[])
 	/*find max error in 1/mu over whole critical curve array and print*/
 	std::cout << "\nFinding maximum error in 1/mu over all calculated critical curve positions...\n";
 
-	*has_nan = 0;
-
-	for (int i = 0; i <= num_phi / (2 * num_branches); i++)
+	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, i, num_phi, num_branches, errs);
+		find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, j, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
@@ -621,9 +616,11 @@ int main(int argc, char* argv[])
 
 
 	/*redefine thread and block size to maximize parallelization*/
+	num_threads_z = 1;
 	num_threads_y = 1;
-	num_threads_x = static_cast<int>(1024 / num_threads_y);
+	num_threads_x = 1024;
 
+	num_blocks_z = 1;
 	num_blocks_y = 1;
 	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
 	if (num_blocks_x > 32768 || num_blocks_x < 1)
@@ -633,8 +630,10 @@ int main(int argc, char* argv[])
 
 	blocks.x = num_blocks_x;
 	blocks.y = num_blocks_y;
+	blocks.z = num_blocks_z;
 	threads.x = num_threads_x;
 	threads.y = num_threads_y;
+	threads.z = num_threads_z;
 
 	std::cout << "\nTransposing critical curve array...\n";
 	starttime = std::chrono::high_resolution_clock::now();

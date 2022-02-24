@@ -14,7 +14,7 @@ lens equation
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
 
-\return w = (1-kappa_smooth)*z + shear*z_bar - theta^2 * sum( m_i / (z-z_i)_bar )
+\return w = (1-kappasmooth)*z + gamma*z_bar - theta^2 * sum( m_i / (z-z_i)_bar )
 ********************************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta)
@@ -30,7 +30,7 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, star<T>* stars, int 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*(1-kappa_smooth)*z+gamma*z_bar-starsum_bar*/
+	/*(1-kappasmooth)*z+gamma*z_bar-starsum_bar*/
 	return z * (1.0 - kappasmooth) + gamma * z.conj() - starsum.conj();
 }
 
@@ -46,7 +46,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param theta -- size of the Einstein radius of a unit mass star
 \param phi -- value of the variable parametrizing z
 
-\return shear + theta^2 * sum( m_i / (z-z_i)^2 ) - (1-kappa_smooth) * e^(-i*phi)
+\return gamma + theta^2 * sum( m_i / (z-z_i)^2 ) - (1-kappasmooth) * e^(-i*phi)
 *******************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, T phi)
@@ -62,7 +62,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, star<T>* stars, in
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*gamma-(1-kappa_smooth)*e^(-i*phi)+starsum*/
+	/*gamma-(1-kappasmooth)*e^(-i*phi)+starsum*/
 	return starsum + gamma - (1.0 - kappasmooth) * Complex<T>(cos(phi), -sin(phi));
 }
 
@@ -97,9 +97,9 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, star<T>* star
 /************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
-k is the index of the particular root (0 <= k < nroots)
 
 \param k -- index of z within the roots array
+			0 <= k < nroots
 \param z -- image plane position
 \param stars -- pointer to array of stars
 \param nstars -- number of stars in array
@@ -158,11 +158,11 @@ sufficient accuracy to false
 \param z -- pointer to array of root positions
 \param nroots -- number of roots
 \param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi
+\param nphi -- total number of steps used for phi in [0, 2*pi]
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
-			  array should be of size nbranches * 2 * nroots
+			  array is of size nbranches * 2 * nroots
 *****************************************************************/
 template <typename T>
 __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi, int nbranches, bool* fin)
@@ -173,16 +173,29 @@ __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi,
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
 
-	for (int k = y_index; k < nbranches; k += y_stride)
-	{
-		for (int i = x_index; i < nroots; i += x_stride)
-		{
-			int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
+	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
+	int z_stride = blockDim.z * gridDim.z;
 
-			z[center + j * nroots + i] = z[center + (j - 1) * nroots + i];
-			z[center - j * nroots + i] = z[center - (j - 1) * nroots + i];
-			fin[k * 2 * nroots + i] = false;
-			fin[k * 2 * nroots + i + nroots] = false;
+	for (int c = z_index; c < nbranches; c += z_stride)
+	{
+		for (int b = y_index; b < 2; b += y_stride)
+		{
+			for (int a = x_index; a < nroots; a += x_stride)
+			{
+				int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
+
+				if (b == 0)
+				{
+
+					z[center + j * nroots + a] = z[center + (j - 1) * nroots + a];
+					fin[c * 2 * nroots + a] = false;
+				}
+				else
+				{
+					z[center - j * nroots + a] = z[center - (j - 1) * nroots + a];
+					fin[c * 2 * nroots + a + nroots] = false;
+				}
+			}
 		}
 	}
 }
@@ -198,11 +211,11 @@ find new critical curve roots
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
 \param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi
+\param nphi -- total number of steps used for phi in [0, 2*pi]
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
-			  array should be of size nbranches * 2 * nroots
+			  array is of size nbranches * 2 * nroots
 *****************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
@@ -213,53 +226,56 @@ __global__ void find_critical_curve_roots_kernel(star<T>* stars, int nstars, T k
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
 
+	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
+	int z_stride = blockDim.z * gridDim.z;
+
 	Complex<T> result;
 	T norm;
 	int sgn;
-	int ipos;
 
 	double PI = 3.1415926535898;
 	T dphi = 2.0 * PI / nphi * j;
 
-	for (int k = y_index; k < nbranches; k += y_stride)
+	for (int c = z_index; c < nbranches; c += z_stride)
 	{
-		T phi0 = PI / nbranches + k * 2.0 * PI / nbranches;
-
-		for (int i = x_index; i < 2 * nroots; i += x_stride)
+		for (int b = y_index; b < 2; b += y_stride)
 		{
-			/*we use the following variables to determine whether we are on the positive
-			or negative side of phi0, as we are simultaneously growing 2 sets of roots
-			after having stepped away from the middle by j out of nphi steps
-			sgn determines the side of phi0, and ipos determines the actual index of
-			the root that we are recalculating*/
-			sgn = (i < nroots ? -1 : 1);
-			ipos = i % nroots;
+			T phi0 = PI / nbranches + c * 2.0 * PI / nbranches;
 
-			/*if root has not already been calculated to desired precision
-			we are calculating nbranches * 2 * nroots roots in parallel, so
-			k * 2 * nroots indicates what branch we are in, with " + i " then
-			indicating the particular root position*/
-			if (!fin[k * 2 * nroots + i])
+			for (int a = x_index; a < nroots; a += x_stride)
 			{
-				/*calculate new root
-				center of the roots array (ie the index of phi0) for all branches is
-				( nphi / (2 * nbranches) + k  * nphi / nbranches ) * nroots
-				for the particular value of phi here (i.e., phi0 +/- dphi),
-				roots start at +/- j*nroots of that center
-				ipos is then added to get the final index of this particular root*/
+				/*we use the following variable to determine whether we are on the positive
+				or negative side of phi0, as we are simultaneously growing 2 sets of roots
+				after having stepped away from the middle by j out of nphi steps*/
+				sgn = (b == 0 ? -1 : 1);
 
-				int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
-				result = find_critical_curve_root<T>(ipos, roots[center + sgn * j * nroots + ipos], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
-
-				/*distance between old root and new root in units of theta_e*/
-				norm = (result - roots[center + sgn * j * nroots + ipos]).abs() / theta;
-
-				/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
-				if (norm < 0.000000001)
+				/*if root has not already been calculated to desired precision
+				we are calculating nbranches * 2 * nroots roots in parallel, so
+				" c * 2 * nroots " indicates what branch we are in, 
+				" b * nroots " indicates whether we are on the positive or negative
+				side, and " a " indicates the particular root position*/
+				if (!fin[c * 2 * nroots + b * nroots + a])
 				{
-					fin[k * 2 * nroots + i] = true;
+					/*calculate new root
+					center of the roots array (ie the index of phi0) for all branches is
+					( nphi / (2 * nbranches) + c  * nphi / nbranches + c) * nroots
+					for the particular value of phi here (i.e., phi0 +/- dphi),
+					roots start at +/- j*nroots of that center
+					a is then added to get the final index of this particular root*/
+
+					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
+					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
+
+					/*distance between old root and new root in units of theta_e*/
+					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
+
+					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
+					if (norm < 0.000000001)
+					{
+						fin[c * 2 * nroots + b * nroots + a] = true;
+					}
+					roots[center + sgn * j * nroots + a] = result;
 				}
-				roots[center + sgn * j * nroots + ipos] = result;
 			}
 		}
 	}
@@ -276,10 +292,10 @@ find maximum error in critical curve roots
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
 \param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi
+\param nphi -- total number of steps used for phi in [0, 2*pi
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
-			   array should be of size nbranches * 2 * nroots
+			   array is of size nbranches * 2 * nroots
 **************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, int j, int nphi, int nbranches, T* errs)
@@ -290,32 +306,36 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, star<T>* stars, in
 	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
 	int y_stride = blockDim.y * gridDim.y;
 
+	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
+	int z_stride = blockDim.z * gridDim.z;
+
 	int sgn;
-	int ipos;
 	
 	double PI = 3.1415926535898;
 	T dphi = 2.0 * PI / nphi * j;
 
-	for (int k = y_index; k < nbranches; k += y_stride)
+	for (int c = z_index; c < nbranches; c += z_stride)
 	{
-		T phi0 = PI / nbranches + k * 2.0 * PI / nbranches;
-
-		for (int i = x_index; i < 2 * nroots; i += x_stride)
+		for (int b = y_index; b < 2; b += y_stride)
 		{
-			sgn = (i < nroots ? -1 : 1);
-			ipos = i % nroots;
+			T phi0 = PI / nbranches + c * 2.0 * PI / nbranches;
 
-			int center = (nphi / (2 * nbranches) + k * nphi / nbranches + k) * nroots;
+			for (int a = x_index; a < nroots; a += x_stride)
+			{
+				sgn = (b == 0 ? -1 : 1);
 
-			/*the value of 1/mu depends on the value of f0
-			this calculation ensures that the maximum possible value of 1/mu is given*/
-			Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + ipos], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi);
+				int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
 
-			T e1 = fabs(f0.abs() * (f0.abs() + 2.0 * (1.0 - kappasmooth)));
-			T e2 = fabs(f0.abs() * (f0.abs() - 2.0 * (1.0 - kappasmooth)));
+				/*the value of 1/mu depends on the value of f0
+				this calculation ensures that the maximum possible value of 1/mu is given*/
+				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], stars, nstars, kappasmooth, gamma, theta, phi0 + sgn * dphi);
 
-			/*return maximum possible error in 1/mu at root position*/
-			errs[center + sgn * j * nroots + ipos] = fmax(e1, e2);
+				T e1 = fabs(f0.abs() * (f0.abs() + 2.0 * (1.0 - kappasmooth)));
+				T e2 = fabs(f0.abs() * (f0.abs() - 2.0 * (1.0 - kappasmooth)));
+
+				/*return maximum possible error in 1/mu at root position*/
+				errs[center + sgn * j * nroots + a] = fmax(e1, e2);
+			}
 		}
 	}
 }
@@ -334,9 +354,9 @@ __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = x_index; i < nerrs; i += x_stride)
+	for (int a = x_index; a < nerrs; a += x_stride)
 	{
-		if (!isfinite(errs[i]))
+		if (!isfinite(errs[a]))
 		{
 			atomicExch(hasnan, 1);
 		}
@@ -356,9 +376,9 @@ __global__ void max_err_kernel(T* errs, int nerrs)
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = x_index; i < nerrs; i += x_stride)
+	for (int a = x_index; a < nerrs; a += x_stride)
 	{
-		errs[i] = fmax(errs[i], errs[i + nerrs]);
+		errs[a] = fmax(errs[a], errs[a + nerrs]);
 	}
 }
 
@@ -380,10 +400,10 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, star<T>* stars, 
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = x_index; i < nroots; i += x_stride)
+	for (int a = x_index; a < nroots; a += x_stride)
 	{
 		/*map image plane positions to source plane positions*/
-		w[i] = complex_image_to_source<T>(z[i], stars, nstars, kappasmooth, gamma, theta);
+		w[a] = complex_image_to_source<T>(z[a], stars, nstars, kappasmooth, gamma, theta);
 	}
 }
 
@@ -401,12 +421,12 @@ __global__ void transpose_array_kernel(Complex<T>* z1, int nrows, int ncols, Com
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
 
-	for (int i = x_index; i < nrows * ncols; i += x_stride)
+	for (int a = x_index; a < nrows * ncols; a += x_stride)
 	{
-		int col = i % ncols;
-		int row = (i - col) / ncols;
+		int col = a % ncols;
+		int row = (a - col) / ncols;
 
-		z2[col * nrows + row] = z1[i];
+		z2[col * nrows + row] = z1[a];
 	}
 }
 

@@ -688,39 +688,39 @@ int main(int argc, char* argv[])
 	std::cout << "Done writing parameter info to file " << outfile_prefix << "ccf_parameter_info.txt\n";
 
 	std::cout << "\nWriting star info...\n";
-	if (!write_star_file<double>(stars, num_stars, outfile_prefix + "ccf_star_info" + outfile_type))
+	if (!write_star_file<double>(stars, num_stars, outfile_prefix + "ccf_stars" + outfile_type))
 	{
-		std::cerr << "Error. Unable to write star info to file " << outfile_prefix << "ccf_star_info" + outfile_type << "\n";
+		std::cerr << "Error. Unable to write star info to file " << outfile_prefix << "ccf_stars" + outfile_type << "\n";
 		return -1;
 	}
-	std::cout << "Done writing star info to file " << outfile_prefix << "ccf_star_info" + outfile_type << "\n";
+	std::cout << "Done writing star info to file " << outfile_prefix << "ccf_stars" + outfile_type << "\n";
 
 
 	/*write critical curve positions*/
 	std::cout << "\nWriting critical curve positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos_x" + outfile_type))
+		if (!write_re_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_x" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write ccs x info to file " << outfile_prefix << "ccf_ccs_pos_x" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write ccs x info to file " << outfile_prefix << "ccf_ccs_x" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing critical curve x positions to file " << outfile_prefix << "ccf_ccs_pos_x" + outfile_type << "\n";
-		if (!write_im_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos_y" + outfile_type))
+		std::cout << "Done writing critical curve x positions to file " << outfile_prefix << "ccf_ccs_x" + outfile_type << "\n";
+		if (!write_im_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_y" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write ccs y info to file " << outfile_prefix << "ccf_ccs_pos_y" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write ccs y info to file " << outfile_prefix << "ccf_ccs_y" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing critical curve y positions to file " << outfile_prefix << "ccf_ccs_pos_y" + outfile_type << "\n";
+		std::cout << "Done writing critical curve y positions to file " << outfile_prefix << "ccf_ccs_y" + outfile_type << "\n";
 	}
 	else
 	{
-		if (!write_complex_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_pos" + outfile_type))
+		if (!write_complex_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write ccs info to file " << outfile_prefix << "ccf_ccs_pos" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write ccs info to file " << outfile_prefix << "ccf_ccs" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing critical curve positions to file " << outfile_prefix << "ccf_ccs_pos" + outfile_type << "\n";
+		std::cout << "Done writing critical curve positions to file " << outfile_prefix << "ccf_ccs" + outfile_type << "\n";
 	}
 
 
@@ -728,27 +728,27 @@ int main(int argc, char* argv[])
 	std::cout << "\nWriting caustic positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos_x" + outfile_type))
+		if (!write_re_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_x" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write caustic x info to file " << outfile_prefix << "ccf_caustics_pos_x" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write caustic x info to file " << outfile_prefix << "ccf_caustics_x" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing caustic x positions to file " << outfile_prefix << "ccf_caustics_pos_x" + outfile_type << "\n";
-		if (!write_im_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos_y" + outfile_type))
+		std::cout << "Done writing caustic x positions to file " << outfile_prefix << "ccf_caustics_x" + outfile_type << "\n";
+		if (!write_im_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_y" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write caustic y info to file " << outfile_prefix << "ccf_caustics_pos_y" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write caustic y info to file " << outfile_prefix << "ccf_caustics_y" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing caustic y positions to file " << outfile_prefix << "ccf_caustics_pos_y" + outfile_type << "\n";
+		std::cout << "Done writing caustic y positions to file " << outfile_prefix << "ccf_caustics_y" + outfile_type << "\n";
 	}
 	else
 	{
-		if (!write_complex_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_pos" + outfile_type))
+		if (!write_complex_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics" + outfile_type))
 		{
-			std::cerr << "Error. Unable to write caustic info to file " << outfile_prefix << "ccf_caustics_pos" + outfile_type << "\n";
+			std::cerr << "Error. Unable to write caustic info to file " << outfile_prefix << "ccf_caustics" + outfile_type << "\n";
 			return -1;
 		}
-		std::cout << "Done writing caustic positions to file " << outfile_prefix << "ccf_caustics_pos" + outfile_type << "\n";
+		std::cout << "Done writing caustic positions to file " << outfile_prefix << "ccf_caustics" + outfile_type << "\n";
 	}
 
 	std::cout << "\nDone.\n";
@@ -807,17 +807,17 @@ void display_usage(char* name)
 		<< "                         Filenames are:\n"
 		<< "                            ccf_parameter_info   various parameter values used\n"
 		<< "                                                     in calculations\n"
-		<< "                            ccf_star_info        the first item is the number\n"
-		<< "                                                     of stars, followed by\n"
-		<< "                                                     binary representations of\n"
-		<< "                                                     the star structures\n"
-		<< "                            ccf_ccs_pos          the first item is num_roots\n"
+		<< "                            ccf_stars            the first item is num_stars,\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     star structures\n"
+		<< "                            ccf_ccs              the first item is num_roots\n"
 		<< "                                                     and the second item is\n"
 		<< "                                                     num_phi + 1, followed by\n"
 		<< "                                                     binary representations of\n"
 		<< "                                                     the complex critical curve\n"
 		<< "                                                     values\n"
-		<< "                            ccf_caustics_pos     the first item is num_roots\n"
+		<< "                            ccf_caustics         the first item is num_roots\n"
 		<< "                                                     and the second item is\n"
 		<< "                                                     num_phi + 1, followed by\n"
 		<< "                                                     binary representations of\n"

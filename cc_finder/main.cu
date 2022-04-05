@@ -813,15 +813,17 @@ void display_usage(char* name)
 		<< "                                                     star structures\n"
 		<< "                            ccf_ccs              the first item is num_roots\n"
 		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi + 1, followed by\n"
-		<< "                                                     binary representations of\n"
-		<< "                                                     the complex critical curve\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex critical curve\n"
 		<< "                                                     values\n"
 		<< "                            ccf_caustics         the first item is num_roots\n"
 		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi + 1, followed by\n"
-		<< "                                                     binary representations of\n"
-		<< "                                                     the complex caustic curve\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex caustic curve\n"
 		<< "                                                     values\n";
 }
 

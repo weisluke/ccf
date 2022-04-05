@@ -807,7 +807,7 @@ void display_usage(char* name)
 		<< "                         Filenames are:\n"
 		<< "                            ccf_parameter_info   various parameter values used\n"
 		<< "                                                     in calculations\n"
-		<< "                            ccf_stars            the first item is num_stars,\n"
+		<< "                            ccf_stars            the first item is num_stars\n"
 		<< "                                                     followed by binary\n"
 		<< "                                                     representations of the\n"
 		<< "                                                     star structures\n"

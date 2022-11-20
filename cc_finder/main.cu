@@ -261,6 +261,11 @@ int main(int argc, char* argv[])
 			if (valid_double(cmdinput))
 			{
 				random_seed = static_cast<int>(std::strtod(cmdinput, nullptr));
+				if (random_seed == 0)
+				{
+					std::cerr << "Error. Invalid random_seed input. Seed of 0 is reserved for star input files.\n";
+					return -1;
+				}
 			}
 			else
 			{
@@ -458,15 +463,12 @@ int main(int argc, char* argv[])
 	
 	int num_threads_z = 1;
 	int num_threads_y = 1;
-	int num_threads_x = 512;
+	int num_threads_x = 32;
 
 	int num_blocks_z = num_branches;
 	int num_blocks_y = 2;
 	int num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
-	if (num_blocks_x > 32768 || num_blocks_x < 1)
-	{
-		num_blocks_x = 32768;
-	}
+	
 	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
 	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
 
@@ -623,10 +625,6 @@ int main(int argc, char* argv[])
 	num_blocks_z = 1;
 	num_blocks_y = 1;
 	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
-	if (num_blocks_x > 32768 || num_blocks_x < 1)
-	{
-		num_blocks_x = 32768;
-	}
 
 	blocks.x = num_blocks_x;
 	blocks.y = num_blocks_y;

@@ -4,20 +4,23 @@
 #include "star.cuh"
 
 
-/********************************************************************************
+/******************************************************************************
 lens equation
 
 \param z -- image plane position
-\param stars -- pointer to array of stars
-\param nstars -- number of stars in array
-\param kappasmooth -- smooth matter convergence
+\param kappa -- convergence
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
+\param stars -- pointer to array of stars
+\param nstars -- number of stars in array
+\param kappastar -- convergence in point masses
+\param c - complex number giving the corner of the rectangular star region
 
-\return w = (1-kappasmooth)*z + gamma*z_bar - theta^2 * sum( m_i / (z-z_i)_bar )
-********************************************************************************/
+\return w = (1-kappa)*z + gamma*z_bar - theta^2 * sum( m_i / (z-z_i)_bar )
+            - (smooth component term)_bar
+******************************************************************************/
 template <typename T>
-__device__ Complex<T> complex_image_to_source(Complex<T> z, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta)
+__device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> c)
 {
 	Complex<T> starsum;
 
@@ -30,8 +33,11 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, star<T>* stars, int 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*(1-kappasmooth)*z+gamma*z_bar-starsum_bar*/
-	return z * (1.0 - kappasmooth) + gamma * z.conj() - starsum.conj();
+	double PI = 3.1415926535898;
+	Complex<T> smooth = Complex<T>(0.0, kappastar / PI) * ((z-c)*(z-c).log() - (z-c.conj())*(z-c.conj()).log() + (z+c)*(z+c).log() - (z+c.conj())*(z+c.conj()).log())
+
+	/*(1-kappa)*z + gamma*z_bar - starsum_bar - smooth_bar*/
+	return z * (1.0 - kappa) + gamma * z.conj() - starsum.conj() - smooth.conj();
 }
 
 /*******************************************************************************
@@ -39,17 +45,20 @@ value of the parametric critical curve equation
 we seek the values of z that make this equation equal to 0 for a given phi
 
 \param z -- image plane position
-\param stars -- pointer to array of stars
-\param nstars -- number of stars in array
-\param kappasmooth -- smooth matter convergence
+\param kappa -- convergence
 \param gamma -- shear
 \param theta -- size of the Einstein radius of a unit mass star
+\param stars -- pointer to array of stars
+\param nstars -- number of stars in array
+\param kappastar -- convergence in point masses
+\param c - complex number giving the corner of the rectangular star region
 \param phi -- value of the variable parametrizing z
 
-\return gamma + theta^2 * sum( m_i / (z-z_i)^2 ) - (1-kappasmooth) * e^(-i*phi)
+\return gamma + theta^2 * sum( m_i / (z-z_i)^2 ) + (smooth component term)
+        - (1-kappa) * e^(-i*phi)
 *******************************************************************************/
 template <typename T>
-__device__ Complex<T> parametric_critical_curve(Complex<T> z, star<T>* stars, int nstars, T kappasmooth, T gamma, T theta, T phi)
+__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> c, T phi)
 {
 	Complex<T> starsum;
 
@@ -62,8 +71,10 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, star<T>* stars, in
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*gamma-(1-kappasmooth)*e^(-i*phi)+starsum*/
-	return starsum + gamma - (1.0 - kappasmooth) * Complex<T>(cos(phi), -sin(phi));
+	Complex<T> smooth = Complex<T>(0.0, kappastar / PI) * ((z - c).log() - (z - c.conj()).log() + (z + c).log() - (z + c.conj()).log())
+
+	/*gamma + starsum -(1-kappasmooth)*e^(-i*phi)*/
+	return gamma + starsum - (1.0 - kappa) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /*********************************************************************

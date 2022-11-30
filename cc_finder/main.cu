@@ -9,13 +9,11 @@ Email: weisluke@alum.mit.edu
 #include "complex.cuh"
 #include "ccf_microlensing.cuh"
 #include "ccf_read_write_files.cuh"
-#include "parse.hpp"
-#include "random_star_field.cuh"
 #include "star.cuh"
+#include "util.hpp"
 
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -65,27 +63,76 @@ double mean_squared_mass = 1.0;
 
 
 
-/************************************************************
-BEGIN structure definitions and function forward declarations
-************************************************************/
-
 /************************************
 Print the program usage help message
 
 \param name -- name of the executable
 ************************************/
-void display_usage(char* name);
-
-/****************************************************
-function to print out progress bar of loops
-examples: [====    ] 50%       [=====  ] 62%
-
-\param icurr -- current position in the loop
-\param imax -- maximum position in the loop
-\param num_bars -- number of = symbols inside the bar
-				   default value: 50
-****************************************************/
-void print_progress(int icurr, int imax, int num_bars = 50);
+void display_usage(char* name)
+{
+	if (name)
+	{
+		std::cout << "Usage: " << name << " opt1 val1 opt2 val2 opt3 val3 ...\n";
+	}
+	else
+	{
+		std::cout << "Usage: programname opt1 val1 opt2 val2 opt3 val3 ...\n";
+	}
+	std::cout << "Options:\n"
+		<< "   -h,--help             Show this help message\n"
+		<< "   -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
+		<< "   -ks,--kappa_smooth    Specify the smooth convergence. Default value: " << kappa_smooth << "\n"
+		<< "   -s,--shear            Specify the shear. Default value: " << shear << "\n"
+		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
+		<< "                         star in arbitrary units. Default value: " << theta_e << "\n"
+		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
+		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
+		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
+		<< "                         Default value: " << num_stars << "\n"
+		<< "                         All stars are taken to be of unit mass. If a range of\n"
+		<< "                         masses are desired, please input them through a file\n"
+		<< "                         as described in the -sf option.\n"
+		<< "   -rs,--random_seed     Specify the random seed for the star field generation.\n"
+		<< "                         A value of 0 is reserved for star input files.\n"
+		<< "                         Default value: " << random_seed << "\n"
+		<< "   -sf,--starfile        Specify the location of a star positions and masses\n"
+		<< "                         file. Default value: " << starfile << "\n"
+		<< "                         The file may be either a whitespace delimited text\n"
+		<< "                         file containing valid values for a star's x\n"
+		<< "                         coordinate, y coordinate, and mass, in that order, on\n"
+		<< "                         each line, or a binary file of star structures (as\n"
+		<< "                         defined in this source code). If specified, the number\n"
+		<< "                         of stars is determined through this file and the -ns\n"
+		<< "                         option is ignored.\n"
+		<< "   -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
+		<< "                         are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
+		<< "   -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
+		<< "                         Default value: " << outfile_prefix << "\n"
+		<< "                         Lines of .txt output files are whitespace delimited.\n"
+		<< "                         Filenames are:\n"
+		<< "                            ccf_parameter_info   various parameter values used\n"
+		<< "                                                     in calculations\n"
+		<< "                            ccf_stars            the first item is num_stars\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     star structures\n"
+		<< "                            ccf_ccs              the first item is num_roots\n"
+		<< "                                                     and the second item is\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex critical curve\n"
+		<< "                                                     values\n"
+		<< "                            ccf_caustics         the first item is num_roots\n"
+		<< "                                                     and the second item is\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex caustic curve\n"
+		<< "                                                     values\n";
+}
 
 /*********************************************************************
 CUDA error checking
@@ -97,11 +144,33 @@ CUDA error checking
 
 \return bool -- true for error, false for no error
 *********************************************************************/
-bool cuda_error(const char* name, bool sync, const char* file, const int line);
-
-/**********************************************************
-END structure definitions and function forward declarations
-**********************************************************/
+bool cuda_error(const char* name, bool sync, const char* file, const int line)
+{
+	cudaError_t err = cudaGetLastError();
+	/*if the last error message is not a success, print the error code and msg
+	and return true (i.e., an error occurred)*/
+	if (err != cudaSuccess)
+	{
+		const char* errMsg = cudaGetErrorString(err);
+		std::cerr << "CUDA error check for " << name << " failed at " << file << ":" << line << "\n";
+		std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
+		return true;
+	}
+	/*if a device synchronization is also to be done*/
+	if (sync)
+	{
+		/*perform the same error checking as initially*/
+		err = cudaDeviceSynchronize();
+		if (err != cudaSuccess)
+		{
+			const char* errMsg = cudaGetErrorString(err);
+			std::cerr << "CUDA error check for cudaDeviceSynchronize failed at " << file << ":" << line << "\n";
+			std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
+			return true;
+		}
+	}
+	return false;
+}
 
 
 
@@ -154,11 +223,11 @@ int main(int argc, char* argv[])
 
 		if (argv[i] == std::string("-k") || argv[i] == std::string("--kappa_tot"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				kappa_tot = std::strtod(cmdinput, nullptr);
+				kappa_tot = std::stod(cmdinput);
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid kappa_tot input.\n";
 				return -1;
@@ -166,11 +235,11 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_smooth"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				kappa_smooth = std::strtod(cmdinput, nullptr);
+				kappa_smooth = std::stod(cmdinput);
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid kappa_smooth input.\n";
 				return -1;
@@ -178,11 +247,11 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-s") || argv[i] == std::string("--shear"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				shear = std::strtod(cmdinput, nullptr);
+				kappa_smooth = std::stod(cmdinput);
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid shear input.\n";
 				return -1;
@@ -190,16 +259,16 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-t") || argv[i] == std::string("--theta_e"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				theta_e = std::strtod(cmdinput, nullptr);
+				theta_e = std::stod(cmdinput);
 				if (theta_e < std::numeric_limits<double>::min())
 				{
 					std::cerr << "Error. Invalid theta_e input. theta_e must be > " << std::numeric_limits<double>::min() << "\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid theta_e input.\n";
 				return -1;
@@ -207,16 +276,16 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-np") || argv[i] == std::string("--num_phi"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_phi = static_cast<int>(std::strtod(cmdinput, nullptr));
+				num_phi = std::stoi(cmdinput);
 				if (num_phi < 1 || num_phi % 2 != 0)
 				{
 					std::cerr << "Error. Invalid num_phi input. num_phi must be an even integer > 0\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid num_phi input.\n";
 				return -1;
@@ -224,16 +293,16 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-nb") || argv[i] == std::string("--num_branches"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_branches = static_cast<int>(std::strtod(cmdinput, nullptr));
+				num_branches = std::stoi(cmdinput);
 				if (num_branches < 1)
 				{
 					std::cerr << "Error. Invalid num_branches input. num_branches must be an integer > 0\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid num_branches input.\n";
 				return -1;
@@ -241,16 +310,16 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_stars = static_cast<int>(std::strtod(cmdinput, nullptr));
+				num_stars = std::stoi(cmdinput);
 				if (num_stars < 1)
 				{
 					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid num_stars input.\n";
 				return -1;
@@ -258,16 +327,16 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-rs") || argv[i] == std::string("--random_seed"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				random_seed = static_cast<int>(std::strtod(cmdinput, nullptr));
+				random_seed = std::stoi(cmdinput);
 				if (random_seed == 0)
 				{
 					std::cerr << "Error. Invalid random_seed input. Seed of 0 is reserved for star input files.\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid random_seed input.\n";
 				return -1;
@@ -399,11 +468,11 @@ int main(int argc, char* argv[])
 		uses default star mass of 1.0*/
 		if (random_seed != 0)
 		{
-			generate_star_field<double>(stars, num_stars, rad, 1.0, random_seed);
+			generate_circular_star_field<double>(stars, num_stars, rad, 1.0, random_seed);
 		}
 		else
 		{
-			random_seed = generate_star_field<double>(stars, num_stars, rad, 1.0);
+			random_seed = generate_circular_star_field<double>(stars, num_stars, rad, 1.0);
 		}
 
 		std::cout << "Done generating star field.\n";
@@ -755,118 +824,5 @@ int main(int argc, char* argv[])
 	if (cuda_error("cudaDeviceReset", false, __FILE__, __LINE__)) return -1;
 
 	return 0;
-}
-
-
-
-void display_usage(char* name)
-{
-	if (name)
-	{
-		std::cout << "Usage: " << name << " opt1 val1 opt2 val2 opt3 val3 ...\n";
-	}
-	else
-	{
-		std::cout << "Usage: programname opt1 val1 opt2 val2 opt3 val3 ...\n";
-	}
-	std::cout << "Options:\n"
-		<< "   -h,--help             Show this help message\n"
-		<< "   -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
-		<< "   -ks,--kappa_smooth    Specify the smooth convergence. Default value: " << kappa_smooth << "\n"
-		<< "   -s,--shear            Specify the shear. Default value: " << shear << "\n"
-		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
-		<< "                         star in arbitrary units. Default value: " << theta_e << "\n"
-		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
-		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
-		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
-		<< "                         Default value: " << num_stars << "\n"
-		<< "                         All stars are taken to be of unit mass. If a range of\n"
-		<< "                         masses are desired, please input them through a file\n"
-		<< "                         as described in the -sf option.\n"
-		<< "   -rs,--random_seed     Specify the random seed for the star field generation.\n"
-		<< "                         A value of 0 is reserved for star input files.\n"
-		<< "                         Default value: " << random_seed << "\n"
-		<< "   -sf,--starfile        Specify the location of a star positions and masses\n"
-		<< "                         file. Default value: " << starfile << "\n"
-		<< "                         The file may be either a whitespace delimited text\n"
-		<< "                         file containing valid values for a star's x\n"
-		<< "                         coordinate, y coordinate, and mass, in that order, on\n"
-		<< "                         each line, or a binary file of star structures (as\n"
-		<< "                         defined in this source code). If specified, the number\n"
-		<< "                         of stars is determined through this file and the -ns\n"
-		<< "                         option is ignored.\n"
-		<< "   -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
-		<< "                         are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
-		<< "   -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
-		<< "                         Default value: " << outfile_prefix << "\n"
-		<< "                         Lines of .txt output files are whitespace delimited.\n"
-		<< "                         Filenames are:\n"
-		<< "                            ccf_parameter_info   various parameter values used\n"
-		<< "                                                     in calculations\n"
-		<< "                            ccf_stars            the first item is num_stars\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     star structures\n"
-		<< "                            ccf_ccs              the first item is num_roots\n"
-		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi / num_branches + 1\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     complex critical curve\n"
-		<< "                                                     values\n"
-		<< "                            ccf_caustics         the first item is num_roots\n"
-		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi / num_branches + 1\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     complex caustic curve\n"
-		<< "                                                     values\n";
-}
-
-void print_progress(int icurr, int imax, int num_bars)
-{
-	std::cout << "\r[";
-	for (int i = 0; i < num_bars; i++)
-	{
-		if (i <= icurr * num_bars / imax)
-		{
-			std::cout << "=";
-		}
-		else
-		{
-			std::cout << " ";
-		}
-	}
-	std::cout << "] " << icurr * 100 / imax << " %";
-}
-
-bool cuda_error(const char* name, bool sync, const char* file, const int line)
-{
-	cudaError_t err = cudaGetLastError();
-	/*if the last error message is not a success, print the error code and msg
-	and return true (i.e., an error occurred)*/
-	if (err != cudaSuccess)
-	{
-		const char* errMsg = cudaGetErrorString(err);
-		std::cerr << "CUDA error check for " << name << " failed at " << file << ":" << line << "\n";
-		std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
-		return true;
-	}
-	/*if a device synchronization is also to be done*/
-	if (sync)
-	{
-		/*perform the same error checking as initially*/
-		err = cudaDeviceSynchronize();
-		if (err != cudaSuccess)
-		{
-			const char* errMsg = cudaGetErrorString(err);
-			std::cerr << "CUDA error check for cudaDeviceSynchronize failed at " << file << ":" << line << "\n";
-			std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
-			return true;
-		}
-	}
-	return false;
 }
 

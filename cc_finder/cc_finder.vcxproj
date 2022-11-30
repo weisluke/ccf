@@ -14,15 +14,11 @@
     <CudaCompile Include="ccf_microlensing.cuh" />
     <CudaCompile Include="ccf_read_write_files.cuh" />
     <CudaCompile Include="complex.cuh" />
-    <ClInclude Include="parse.hpp" />
-    <CudaCompile Include="random_star_field.cuh" />
+    <ClInclude Include="util.hpp" />
     <CudaCompile Include="star.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="parse.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />

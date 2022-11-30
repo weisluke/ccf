@@ -6,18 +6,18 @@ Email: weisluke@alum.mit.edu
 *****************************************************************/
 
 
-#include "complex.cuh"
-#include "ccf_microlensing.cuh"
-#include "ccf_read_write_files.cuh"
-#include "star.cuh"
-#include "util.hpp"
-
 #include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
+
+#include "complex.cuh"
+#include "ccf_microlensing.cuh"
+#include "ccf_read_write_files.cuh"
+#include "star.cuh"
+#include "util.hpp"
 
 
 

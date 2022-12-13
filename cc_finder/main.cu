@@ -267,6 +267,11 @@ int main(int argc, char* argv[])
 			try
 			{
 				kappa_star = std::stod(cmdinput);
+				if (kappa_star < std::numeric_limits<double>::min())
+				{
+					std::cerr << "Error. Invalid kappa_star input. kappa_star must be > " << std::numeric_limits<double>::min() << "\n";
+					return -1;
+				}
 			}
 			catch (...)
 			{

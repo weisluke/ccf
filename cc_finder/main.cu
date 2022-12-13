@@ -6,18 +6,18 @@ Email: weisluke@alum.mit.edu
 *****************************************************************/
 
 
+#include "complex.cuh"
+#include "ccf_microlensing.cuh"
+#include "ccf_read_write_files.cuh"
+#include "star.cuh"
+#include "util.hpp"
+
 #include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
-
-#include "complex.cuh"
-#include "ccf_microlensing.cuh"
-#include "ccf_read_write_files.cuh"
-#include "star.cuh"
-#include "util.hpp"
 
 
 
@@ -27,14 +27,14 @@ const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
 	"-k", "--kappa_tot",
-	"-ks", "--kappa_smooth",
 	"-s", "--shear",
 	"-t", "--theta_e",
+	"-ks", "--kappa_star",
+	"-ns", "--num_stars",
+	"-sf", "--starfile",
 	"-np", "--num_phi",
 	"-nb", "--num_branches",
-	"-ns", "--num_stars",
 	"-rs", "--random_seed",
-	"-sf", "--starfile",
 	"-ot", "--outfile_type",
 	"-o", "--outfile_prefix"
 };
@@ -42,16 +42,16 @@ const std::string OPTS[OPTS_SIZE] =
 
 /*default input option values*/
 double kappa_tot = 0.3;
-double kappa_smooth = 0.03;
 double shear = 0.3;
 double theta_e = 1.0;
+double kappa_star = 0.27;
+int num_stars = 137;
+std::string starfile = "";
 int num_phi = 50;
 int num_branches = 1;
-int num_stars = 137;
 int random_seed = 0;
-std::string starfile = "";
-std::string outfile_prefix = "./";
 std::string outfile_type = ".bin";
+std::string outfile_prefix = "./";
 
 /*default derived parameter values
 upper and lower mass cutoffs,
@@ -78,25 +78,20 @@ void display_usage(char* name)
 	{
 		std::cout << "Usage: programname opt1 val1 opt2 val2 opt3 val3 ...\n";
 	}
-	std::cout << "Options:\n"
+	std::cout 
+		<< "Options:\n"
 		<< "   -h,--help             Show this help message\n"
 		<< "   -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
-		<< "   -ks,--kappa_smooth    Specify the smooth convergence. Default value: " << kappa_smooth << "\n"
 		<< "   -s,--shear            Specify the shear. Default value: " << shear << "\n"
 		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
-		<< "                         star in arbitrary units. Default value: " << theta_e << "\n"
-		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
-		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
+		<< "                         point lens in arbitrary units. Default value: " << theta_e << "\n"
+		<< "   -ks,--kappa_star      Specify the convergence in point mass lenses.\n"
+		<< "                         Default value: " << kappa_star << "\n"
 		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
 		<< "                         Default value: " << num_stars << "\n"
 		<< "                         All stars are taken to be of unit mass. If a range of\n"
 		<< "                         masses are desired, please input them through a file\n"
 		<< "                         as described in the -sf option.\n"
-		<< "   -rs,--random_seed     Specify the random seed for the star field generation.\n"
-		<< "                         A value of 0 is reserved for star input files.\n"
-		<< "                         Default value: " << random_seed << "\n"
 		<< "   -sf,--starfile        Specify the location of a star positions and masses\n"
 		<< "                         file. Default value: " << starfile << "\n"
 		<< "                         The file may be either a whitespace delimited text\n"
@@ -106,6 +101,12 @@ void display_usage(char* name)
 		<< "                         defined in this source code). If specified, the number\n"
 		<< "                         of stars is determined through this file and the -ns\n"
 		<< "                         option is ignored.\n"
+		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
+		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
+		<< "   -rs,--random_seed     Specify the random seed for star field generation.\n"
+		<< "                         A value of 0 is reserved for star input files.\n"
 		<< "   -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
 		<< "                         are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
 		<< "   -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
@@ -233,23 +234,11 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_smooth"))
-		{
-			try
-			{
-				kappa_smooth = std::stod(cmdinput);
-			}
-			catch (...)
-			{
-				std::cerr << "Error. Invalid kappa_smooth input.\n";
-				return -1;
-			}
-		}
 		else if (argv[i] == std::string("-s") || argv[i] == std::string("--shear"))
 		{
 			try
 			{
-				kappa_smooth = std::stod(cmdinput);
+				shear = std::stod(cmdinput);
 			}
 			catch (...)
 			{
@@ -273,6 +262,39 @@ int main(int argc, char* argv[])
 				std::cerr << "Error. Invalid theta_e input.\n";
 				return -1;
 			}
+		}
+		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_star"))
+		{
+			try
+			{
+				kappa_star = std::stod(cmdinput);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid kappa_star input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
+		{
+			try
+			{
+				num_stars = std::stoi(cmdinput);
+				if (num_stars < 1)
+				{
+					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid num_stars input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-sf") || argv[i] == std::string("--starfile"))
+		{
+			starfile = cmdinput;
 		}
 		else if (argv[i] == std::string("-np") || argv[i] == std::string("--num_phi"))
 		{
@@ -308,23 +330,6 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
-		{
-			try
-			{
-				num_stars = std::stoi(cmdinput);
-				if (num_stars < 1)
-				{
-					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
-					return -1;
-				}
-			}
-			catch (...)
-			{
-				std::cerr << "Error. Invalid num_stars input.\n";
-				return -1;
-			}
-		}
 		else if (argv[i] == std::string("-rs") || argv[i] == std::string("--random_seed"))
 		{
 			try
@@ -341,10 +346,6 @@ int main(int argc, char* argv[])
 				std::cerr << "Error. Invalid random_seed input.\n";
 				return -1;
 			}
-		}
-		else if (argv[i] == std::string("-sf") || argv[i] == std::string("--starfile"))
-		{
-			starfile = cmdinput;
 		}
 		else if (argv[i] == std::string("-ot") || argv[i] == std::string("--outfile_type"))
 		{
@@ -392,17 +393,13 @@ int main(int argc, char* argv[])
 		std::cout << "Done calculating some parameter values based on star input file " << starfile << "\n";
 	}
 
-
-	/*variable to hold kappa_star*/
-	double kappa_star = kappa_tot - kappa_smooth;
-
 	/*average magnification of the system*/
 	double mu_ave = 1.0 / ((1.0 - kappa_tot) * (1.0 - kappa_tot) - shear * shear);
 
-	/*radius needed for number of stars*/
-	double rad = std::sqrt(num_stars * mean_mass * theta_e * theta_e / kappa_star);
-
 	std::cout << "Number of stars used: " << num_stars << "\n";
+
+	/*radius needed for number of stars*/
+	double rad = std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star);
 
 	/*number of roots to be found*/
 	int num_roots = 2 * num_stars;
@@ -567,7 +564,7 @@ int main(int argc, char* argv[])
 		print_progress(i, num_iters - 1);
 
 		/*start kernel and perform error checking*/
-		find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 
@@ -579,7 +576,7 @@ int main(int argc, char* argv[])
 
 
 	/*calculate errors in 1/mu for initial roots*/
-	find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, 0, num_phi, num_branches, errs);
+	find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
 	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
@@ -630,7 +627,7 @@ int main(int argc, char* argv[])
 		/*solve roots for current values of j*/
 		for (int i = 0; i < num_iters; i++)
 		{
-			find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, j, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -657,7 +654,7 @@ int main(int argc, char* argv[])
 
 	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, j, num_phi, num_branches, errs);
+		find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, j, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
@@ -711,7 +708,7 @@ int main(int argc, char* argv[])
 
 	std::cout << "\nFinding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<double> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
+	find_caustics_kernel<double> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -732,21 +729,20 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 	outfile << "kappa_tot " << kappa_tot << "\n";
-	outfile << "kappa_star " << kappa_star << "\n";
-	outfile << "kappa_smooth " << kappa_smooth << "\n";
 	outfile << "shear " << shear << "\n";
-	outfile << "theta_e " << theta_e << "\n";
 	outfile << "mu_ave " << mu_ave << "\n";
+	outfile << "theta_e " << theta_e << "\n";
+	outfile << "kappa_star " << kappa_star << "\n";
 	outfile << "lower_mass_cutoff " << m_lower << "\n";
 	outfile << "upper_mass_cutoff " << m_upper << "\n";
 	outfile << "mean_mass " << mean_mass << "\n";
 	outfile << "mean_squared_mass " << mean_squared_mass << "\n";
 	outfile << "num_stars " << num_stars << "\n";
 	outfile << "rad " << rad << "\n";
-	outfile << "random_seed " << random_seed << "\n";
 	outfile << "num_roots " << num_roots << "\n";
 	outfile << "num_phi " << num_phi << "\n";
 	outfile << "num_branches " << num_branches << "\n";
+	outfile << "random_seed " << random_seed << "\n";
 	outfile << "max_error_1/mu " << max_error << "\n";
 	outfile << "t_init_roots " << t_init_roots << "\n";
 	outfile << "t_ccs " << t_ccs << "\n";

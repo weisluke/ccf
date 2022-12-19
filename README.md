@@ -11,6 +11,6 @@ Once initial roots are found for phi=pi, further roots for varying phase 0<=phi<
 traversing pi -> 2\*pi and pi -> 0. We directly use all the stars in a field, avoiding complex Taylor expansions as described in WKR 1993. 
 It is possible that further speedups could be gained through such approximations. 
 
-Values for kappa_tot, kappa_smooth, shear, theta_e, num_phi (number of steps to use for phi from 0->2pi), num_stars, random seed, star input file, 
+Values for kappa_tot, kappa_smooth, shear, theta_e, num_phi (number of steps to use for phi from 0->2pi), num_branches, num_stars, random seed, star input file, 
 output file type (.bin or .txt), and output filename prefix, can all be input through the command line.  
 

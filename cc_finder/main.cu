@@ -9,19 +9,18 @@ Email: weisluke@alum.mit.edu
 #include "complex.cuh"
 #include "ccf_microlensing.cuh"
 #include "ccf_read_write_files.cuh"
-#include "parse.hpp"
-#include "random_star_field.cuh"
 #include "star.cuh"
+#include "util.hpp"
 
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
 
 
+using dtype = double;
 
 /*constants to be used*/
 constexpr int OPTS_SIZE = 2 * 12;
@@ -29,63 +28,112 @@ const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
 	"-k", "--kappa_tot",
-	"-ks", "--kappa_smooth",
 	"-s", "--shear",
 	"-t", "--theta_e",
+	"-ks", "--kappa_star",
+	"-ns", "--num_stars",
+	"-sf", "--starfile",
 	"-np", "--num_phi",
 	"-nb", "--num_branches",
-	"-ns", "--num_stars",
 	"-rs", "--random_seed",
-	"-sf", "--starfile",
 	"-ot", "--outfile_type",
 	"-o", "--outfile_prefix"
 };
 
 
 /*default input option values*/
-double kappa_tot = 0.3;
-double kappa_smooth = 0.03;
-double shear = 0.3;
-double theta_e = 1.0;
+dtype kappa_tot = static_cast<dtype>(0.3);
+dtype shear = static_cast<dtype>(0.3);
+dtype theta_e = static_cast<dtype>(1);
+dtype kappa_star = static_cast<dtype>(0.27);
+int num_stars = 137;
+std::string starfile = "";
 int num_phi = 50;
 int num_branches = 1;
-int num_stars = 137;
 int random_seed = 0;
-std::string starfile = "";
-std::string outfile_prefix = "./";
 std::string outfile_type = ".bin";
+std::string outfile_prefix = "./";
 
 /*default derived parameter values
 upper and lower mass cutoffs,
 <m>, and <m^2>*/
-double m_lower = 1.0;
-double m_upper = 1.0;
-double mean_mass = 1.0;
-double mean_squared_mass = 1.0;
+dtype m_lower = static_cast<dtype>(1);
+dtype m_upper = static_cast<dtype>(1);
+dtype mean_mass = static_cast<dtype>(1);
+dtype mean_squared_mass = static_cast<dtype>(1);
 
 
-
-/************************************************************
-BEGIN structure definitions and function forward declarations
-************************************************************/
 
 /************************************
 Print the program usage help message
 
 \param name -- name of the executable
 ************************************/
-void display_usage(char* name);
-
-/****************************************************
-function to print out progress bar of loops
-examples: [====    ] 50%       [=====  ] 62%
-
-\param icurr -- current position in the loop
-\param imax -- maximum position in the loop
-\param num_bars -- number of = symbols inside the bar
-				   default value: 50
-****************************************************/
-void print_progress(int icurr, int imax, int num_bars = 50);
+void display_usage(char* name)
+{
+	if (name)
+	{
+		std::cout << "Usage: " << name << " opt1 val1 opt2 val2 opt3 val3 ...\n";
+	}
+	else
+	{
+		std::cout << "Usage: programname opt1 val1 opt2 val2 opt3 val3 ...\n";
+	}
+	std::cout 
+		<< "Options:\n"
+		<< "   -h,--help             Show this help message\n"
+		<< "   -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
+		<< "   -s,--shear            Specify the shear. Default value: " << shear << "\n"
+		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
+		<< "                         point lens in arbitrary units. Default value: " << theta_e << "\n"
+		<< "   -ks,--kappa_star      Specify the convergence in point mass lenses.\n"
+		<< "                         Default value: " << kappa_star << "\n"
+		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
+		<< "                         Default value: " << num_stars << "\n"
+		<< "                         All stars are taken to be of unit mass. If a range of\n"
+		<< "                         masses are desired, please input them through a file\n"
+		<< "                         as described in the -sf option.\n"
+		<< "   -sf,--starfile        Specify the location of a star positions and masses\n"
+		<< "                         file. The file may be either a whitespace delimited\n"
+		<< "                         text file containing valid values for a star's x\n"
+		<< "                         coordinate, y coordinate, and mass, in that order, on\n"
+		<< "                         each line, or a binary file of star structures (as\n"
+		<< "                         defined in this source code). If specified, the number\n"
+		<< "                         of stars is determined through this file and the -ns\n"
+		<< "                         option is ignored.\n"
+		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
+		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
+		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
+		<< "   -rs,--random_seed     Specify the random seed for star field generation.\n"
+		<< "                         A value of 0 is reserved for star input files.\n"
+		<< "   -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
+		<< "                         are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
+		<< "   -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
+		<< "                         Default value: " << outfile_prefix << "\n"
+		<< "                         Lines of .txt output files are whitespace delimited.\n"
+		<< "                         Filenames are:\n"
+		<< "                            ccf_parameter_info   various parameter values used\n"
+		<< "                                                     in calculations\n"
+		<< "                            ccf_stars            the first item is num_stars\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     star structures\n"
+		<< "                            ccf_ccs              the first item is num_roots\n"
+		<< "                                                     and the second item is\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex critical curve\n"
+		<< "                                                     values\n"
+		<< "                            ccf_caustics         the first item is num_roots\n"
+		<< "                                                     and the second item is\n"
+		<< "                                                     num_phi / num_branches + 1\n"
+		<< "                                                     followed by binary\n"
+		<< "                                                     representations of the\n"
+		<< "                                                     complex caustic curve\n"
+		<< "                                                     values\n";
+}
 
 /*********************************************************************
 CUDA error checking
@@ -97,11 +145,33 @@ CUDA error checking
 
 \return bool -- true for error, false for no error
 *********************************************************************/
-bool cuda_error(const char* name, bool sync, const char* file, const int line);
-
-/**********************************************************
-END structure definitions and function forward declarations
-**********************************************************/
+bool cuda_error(const char* name, bool sync, const char* file, const int line)
+{
+	cudaError_t err = cudaGetLastError();
+	/*if the last error message is not a success, print the error code and msg
+	and return true (i.e., an error occurred)*/
+	if (err != cudaSuccess)
+	{
+		const char* errMsg = cudaGetErrorString(err);
+		std::cerr << "CUDA error check for " << name << " failed at " << file << ":" << line << "\n";
+		std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
+		return true;
+	}
+	/*if a device synchronization is also to be done*/
+	if (sync)
+	{
+		/*perform the same error checking as initially*/
+		err = cudaDeviceSynchronize();
+		if (err != cudaSuccess)
+		{
+			const char* errMsg = cudaGetErrorString(err);
+			std::cerr << "CUDA error check for cudaDeviceSynchronize failed at " << file << ":" << line << "\n";
+			std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
+			return true;
+		}
+	}
+	return false;
+}
 
 
 
@@ -154,35 +224,23 @@ int main(int argc, char* argv[])
 
 		if (argv[i] == std::string("-k") || argv[i] == std::string("--kappa_tot"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				kappa_tot = std::strtod(cmdinput, nullptr);
+				kappa_tot = static_cast<dtype>(std::stod(cmdinput));
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid kappa_tot input.\n";
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_smooth"))
-		{
-			if (valid_double(cmdinput))
-			{
-				kappa_smooth = std::strtod(cmdinput, nullptr);
-			}
-			else
-			{
-				std::cerr << "Error. Invalid kappa_smooth input.\n";
-				return -1;
-			}
-		}
 		else if (argv[i] == std::string("-s") || argv[i] == std::string("--shear"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				shear = std::strtod(cmdinput, nullptr);
+				shear = static_cast<dtype>(std::stod(cmdinput));
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid shear input.\n";
 				return -1;
@@ -190,33 +248,71 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-t") || argv[i] == std::string("--theta_e"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				theta_e = std::strtod(cmdinput, nullptr);
-				if (theta_e < std::numeric_limits<double>::min())
+				theta_e = static_cast<dtype>(std::stod(cmdinput));
+				if (theta_e < std::numeric_limits<dtype>::min())
 				{
-					std::cerr << "Error. Invalid theta_e input. theta_e must be > " << std::numeric_limits<double>::min() << "\n";
+					std::cerr << "Error. Invalid theta_e input. theta_e must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid theta_e input.\n";
 				return -1;
 			}
 		}
+		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_star"))
+		{
+			try
+			{
+				kappa_star = static_cast<dtype>(std::stod(cmdinput));
+				if (kappa_star < std::numeric_limits<dtype>::min())
+				{
+					std::cerr << "Error. Invalid kappa_star input. kappa_star must be > " << std::numeric_limits<dtype>::min() << "\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid kappa_star input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
+		{
+			try
+			{
+				num_stars = std::stoi(cmdinput);
+				if (num_stars < 1)
+				{
+					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid num_stars input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-sf") || argv[i] == std::string("--starfile"))
+		{
+			starfile = cmdinput;
+		}
 		else if (argv[i] == std::string("-np") || argv[i] == std::string("--num_phi"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_phi = static_cast<int>(std::strtod(cmdinput, nullptr));
+				num_phi = std::stoi(cmdinput);
 				if (num_phi < 1 || num_phi % 2 != 0)
 				{
 					std::cerr << "Error. Invalid num_phi input. num_phi must be an even integer > 0\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid num_phi input.\n";
 				return -1;
@@ -224,53 +320,37 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-nb") || argv[i] == std::string("--num_branches"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_branches = static_cast<int>(std::strtod(cmdinput, nullptr));
+				num_branches = std::stoi(cmdinput);
 				if (num_branches < 1)
 				{
 					std::cerr << "Error. Invalid num_branches input. num_branches must be an integer > 0\n";
 					return -1;
 				}
 			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid num_branches input.\n";
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
+		else if (argv[i] == std::string("-rs") || argv[i] == std::string("--random_seed"))
 		{
-			if (valid_double(cmdinput))
+			try
 			{
-				num_stars = static_cast<int>(std::strtod(cmdinput, nullptr));
-				if (num_stars < 1)
+				random_seed = std::stoi(cmdinput);
+				if (random_seed == 0)
 				{
-					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
+					std::cerr << "Error. Invalid random_seed input. Seed of 0 is reserved for star input files.\n";
 					return -1;
 				}
 			}
-			else
-			{
-				std::cerr << "Error. Invalid num_stars input.\n";
-				return -1;
-			}
-		}
-		else if (argv[i] == std::string("-rs") || argv[i] == std::string("--random_seed"))
-		{
-			if (valid_double(cmdinput))
-			{
-				random_seed = static_cast<int>(std::strtod(cmdinput, nullptr));
-			}
-			else
+			catch (...)
 			{
 				std::cerr << "Error. Invalid random_seed input.\n";
 				return -1;
 			}
-		}
-		else if (argv[i] == std::string("-sf") || argv[i] == std::string("--starfile"))
-		{
-			starfile = cmdinput;
 		}
 		else if (argv[i] == std::string("-ot") || argv[i] == std::string("--outfile_type"))
 		{
@@ -309,7 +389,7 @@ int main(int argc, char* argv[])
 	{
 		std::cout << "Calculating some parameter values based on star input file " << starfile << "\n";
 
-		if (!read_star_params<double>(num_stars, m_lower, m_upper, mean_mass, mean_squared_mass, starfile))
+		if (!read_star_params<dtype>(num_stars, m_lower, m_upper, mean_mass, mean_squared_mass, starfile))
 		{
 			std::cerr << "Error. Unable to read star field parameters from file " << starfile << "\n";
 			return -1;
@@ -318,17 +398,13 @@ int main(int argc, char* argv[])
 		std::cout << "Done calculating some parameter values based on star input file " << starfile << "\n";
 	}
 
-
-	/*variable to hold kappa_star*/
-	double kappa_star = kappa_tot - kappa_smooth;
-
 	/*average magnification of the system*/
-	double mu_ave = 1.0 / ((1.0 - kappa_tot) * (1.0 - kappa_tot) - shear * shear);
-
-	/*radius needed for number of stars*/
-	double rad = std::sqrt(num_stars * mean_mass * theta_e * theta_e / kappa_star);
+	dtype mu_ave = 1 / ((1 - kappa_tot) * (1 - kappa_tot) - shear * shear);
 
 	std::cout << "Number of stars used: " << num_stars << "\n";
+
+	/*radius needed for number of stars*/
+	dtype rad = std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star);
 
 	/*number of roots to be found*/
 	int num_roots = 2 * num_stars;
@@ -338,24 +414,24 @@ int main(int argc, char* argv[])
 	BEGIN memory allocation
 	**********************/
 
-	star<double>* stars = nullptr;
-	Complex<double>* ccs_init = nullptr;
-	Complex<double>* ccs = nullptr;
+	star<dtype>* stars = nullptr;
+	Complex<dtype>* ccs_init = nullptr;
+	Complex<dtype>* ccs = nullptr;
 	bool* fin = nullptr;
-	double* errs = nullptr;
-	Complex<double>* caustics = nullptr;
+	dtype* errs = nullptr;
+	Complex<dtype>* caustics = nullptr;
 	int* has_nan = nullptr;
 
 	/*allocate memory for stars*/
-	cudaMallocManaged(&stars, num_stars * sizeof(star<double>));
+	cudaMallocManaged(&stars, num_stars * sizeof(star<dtype>));
 	if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return -1;
 
 	/*allocate memory for array of critical curve positions*/
-	cudaMallocManaged(&ccs_init, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&ccs_init, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*ccs_init)", false, __FILE__, __LINE__)) return -1;
 
 	/*allocate memory for array of transposed critical curve positions*/
-	cudaMallocManaged(&ccs, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&ccs, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*ccs)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold t/f values of whether or not roots have been found to desired precision*/
@@ -363,11 +439,11 @@ int main(int argc, char* argv[])
 	if (cuda_error("cudaMallocManaged(*fin)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold root errors*/
-	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(double));
+	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(dtype));
 	if (cuda_error("cudaMallocManaged(*errs)", false, __FILE__, __LINE__)) return -1;
 
 	/*array to hold caustic positions*/
-	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<double>));
+	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
 
 	/*variable to hold has_nan*/
@@ -394,11 +470,11 @@ int main(int argc, char* argv[])
 		uses default star mass of 1.0*/
 		if (random_seed != 0)
 		{
-			generate_star_field<double>(stars, num_stars, rad, 1.0, random_seed);
+			generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1), random_seed);
 		}
 		else
 		{
-			random_seed = generate_star_field<double>(stars, num_stars, rad, 1.0);
+			random_seed = generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1));
 		}
 
 		std::cout << "Done generating star field.\n";
@@ -411,7 +487,7 @@ int main(int argc, char* argv[])
 		std::cout << "Reading star field from file " << starfile << "\n";
 
 		/*reading star field from external file*/
-		if (!read_star_file<double>(stars, num_stars, starfile))
+		if (!read_star_file<dtype>(stars, num_stars, starfile))
 		{
 			std::cerr << "Error. Unable to read star field from file " << starfile << "\n";
 			return -1;
@@ -434,8 +510,8 @@ int main(int argc, char* argv[])
 		for (int i = 0; i < num_stars; i++)
 		{
 			int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
-			ccs_init[center + i ] = stars[i].position + 1.0;
-			ccs_init[center + i + num_stars] = stars[i].position - 1.0;
+			ccs_init[center + i ] = stars[i].position + 1;
+			ccs_init[center + i + num_stars] = stars[i].position - 1;
 		}
 	}
 
@@ -450,7 +526,7 @@ int main(int argc, char* argv[])
 
 	for (int i = 0; i < (num_phi + num_branches) * num_roots; i++)
 	{
-		errs[i] = 0.0;
+		errs[i] = static_cast<dtype>(0);
 	}
 
 	/*number of threads per block, and number of blocks per grid
@@ -458,15 +534,12 @@ int main(int argc, char* argv[])
 	
 	int num_threads_z = 1;
 	int num_threads_y = 1;
-	int num_threads_x = 512;
+	int num_threads_x = 32;
 
 	int num_blocks_z = num_branches;
 	int num_blocks_y = 2;
 	int num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
-	if (num_blocks_x > 32768 || num_blocks_x < 1)
-	{
-		num_blocks_x = 32768;
-	}
+	
 	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
 	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
 
@@ -496,7 +569,7 @@ int main(int argc, char* argv[])
 		print_progress(i, num_iters - 1);
 
 		/*start kernel and perform error checking*/
-		find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 
@@ -508,10 +581,10 @@ int main(int argc, char* argv[])
 
 
 	/*calculate errors in 1/mu for initial roots*/
-	find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, 0, num_phi, num_branches, errs);
+	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
-	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
+	has_nan_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
 	if (cuda_error("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -530,10 +603,10 @@ int main(int argc, char* argv[])
 			num_errs -= 1;
 		}
 		num_errs /= 2;
-		max_err_kernel<double> <<<blocks, threads>>> (errs, num_errs);
+		max_err_kernel<dtype> <<<blocks, threads>>> (errs, num_errs);
 		if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
 	}
-	double max_error = errs[0];
+	dtype max_error = errs[0];
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n";
 
 
@@ -553,13 +626,13 @@ int main(int argc, char* argv[])
 
 		/*set critical curve array elements to be equal to last roots
 		fin array is reused each time*/
-		prepare_roots_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, j, num_phi, num_branches, fin);
+		prepare_roots_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, j, num_phi, num_branches, fin);
 		if (cuda_error("prepare_roots_kernel", false, __FILE__, __LINE__)) return -1;
 
 		/*solve roots for current values of j*/
 		for (int i = 0; i < num_iters; i++)
 		{
-			find_critical_curve_roots_kernel<double> <<<blocks, threads>>> (stars, num_stars, kappa_smooth, shear, theta_e, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, j, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -586,11 +659,11 @@ int main(int argc, char* argv[])
 
 	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		find_errors_kernel<double> <<<blocks, threads>>> (ccs_init, num_roots, stars, num_stars, kappa_smooth, shear, theta_e, j, num_phi, num_branches, errs);
+		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, j, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
-	has_nan_err_kernel<double> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
+	has_nan_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
 	if (cuda_error("has_nan_err_kernel", true, __FILE__, __LINE__)) return -1;
 
 	if (*has_nan)
@@ -608,7 +681,7 @@ int main(int argc, char* argv[])
 			num_errs -= 1;
 		}
 		num_errs /= 2;
-		max_err_kernel<double> <<<blocks, threads>>> (errs, num_errs);
+		max_err_kernel<dtype> <<<blocks, threads>>> (errs, num_errs);
 		if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 	max_error = errs[0];
@@ -623,10 +696,6 @@ int main(int argc, char* argv[])
 	num_blocks_z = 1;
 	num_blocks_y = 1;
 	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
-	if (num_blocks_x > 32768 || num_blocks_x < 1)
-	{
-		num_blocks_x = 32768;
-	}
 
 	blocks.x = num_blocks_x;
 	blocks.y = num_blocks_y;
@@ -637,14 +706,14 @@ int main(int argc, char* argv[])
 
 	std::cout << "\nTransposing critical curve array...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	transpose_array_kernel<double> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
+	transpose_array_kernel<dtype> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 	if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0 << " seconds.\n";
 
 	std::cout << "\nFinding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<double> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, stars, num_stars, kappa_smooth, shear, theta_e, caustics);
+	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -665,21 +734,20 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 	outfile << "kappa_tot " << kappa_tot << "\n";
-	outfile << "kappa_star " << kappa_star << "\n";
-	outfile << "kappa_smooth " << kappa_smooth << "\n";
 	outfile << "shear " << shear << "\n";
-	outfile << "theta_e " << theta_e << "\n";
 	outfile << "mu_ave " << mu_ave << "\n";
+	outfile << "theta_e " << theta_e << "\n";
+	outfile << "kappa_star " << kappa_star << "\n";
 	outfile << "lower_mass_cutoff " << m_lower << "\n";
 	outfile << "upper_mass_cutoff " << m_upper << "\n";
 	outfile << "mean_mass " << mean_mass << "\n";
 	outfile << "mean_squared_mass " << mean_squared_mass << "\n";
 	outfile << "num_stars " << num_stars << "\n";
 	outfile << "rad " << rad << "\n";
-	outfile << "random_seed " << random_seed << "\n";
 	outfile << "num_roots " << num_roots << "\n";
 	outfile << "num_phi " << num_phi << "\n";
 	outfile << "num_branches " << num_branches << "\n";
+	outfile << "random_seed " << random_seed << "\n";
 	outfile << "max_error_1/mu " << max_error << "\n";
 	outfile << "t_init_roots " << t_init_roots << "\n";
 	outfile << "t_ccs " << t_ccs << "\n";
@@ -688,7 +756,7 @@ int main(int argc, char* argv[])
 	std::cout << "Done writing parameter info to file " << outfile_prefix << "ccf_parameter_info.txt\n";
 
 	std::cout << "\nWriting star info...\n";
-	if (!write_star_file<double>(stars, num_stars, outfile_prefix + "ccf_stars" + outfile_type))
+	if (!write_star_file<dtype>(stars, num_stars, outfile_prefix + "ccf_stars" + outfile_type))
 	{
 		std::cerr << "Error. Unable to write star info to file " << outfile_prefix << "ccf_stars" + outfile_type << "\n";
 		return -1;
@@ -700,13 +768,13 @@ int main(int argc, char* argv[])
 	std::cout << "\nWriting critical curve positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_x" + outfile_type))
+		if (!write_re_array<dtype>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_x" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs x info to file " << outfile_prefix << "ccf_ccs_x" + outfile_type << "\n";
 			return -1;
 		}
 		std::cout << "Done writing critical curve x positions to file " << outfile_prefix << "ccf_ccs_x" + outfile_type << "\n";
-		if (!write_im_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_y" + outfile_type))
+		if (!write_im_array<dtype>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs_y" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs y info to file " << outfile_prefix << "ccf_ccs_y" + outfile_type << "\n";
 			return -1;
@@ -715,7 +783,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		if (!write_complex_array<double>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs" + outfile_type))
+		if (!write_complex_array<dtype>(ccs, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_ccs" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write ccs info to file " << outfile_prefix << "ccf_ccs" + outfile_type << "\n";
 			return -1;
@@ -728,13 +796,13 @@ int main(int argc, char* argv[])
 	std::cout << "\nWriting caustic positions...\n";
 	if (outfile_type == ".txt")
 	{
-		if (!write_re_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_x" + outfile_type))
+		if (!write_re_array<dtype>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_x" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic x info to file " << outfile_prefix << "ccf_caustics_x" + outfile_type << "\n";
 			return -1;
 		}
 		std::cout << "Done writing caustic x positions to file " << outfile_prefix << "ccf_caustics_x" + outfile_type << "\n";
-		if (!write_im_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_y" + outfile_type))
+		if (!write_im_array<dtype>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics_y" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic y info to file " << outfile_prefix << "ccf_caustics_y" + outfile_type << "\n";
 			return -1;
@@ -743,7 +811,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		if (!write_complex_array<double>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics" + outfile_type))
+		if (!write_complex_array<dtype>(caustics, num_roots * num_branches, num_phi / num_branches + 1, outfile_prefix + "ccf_caustics" + outfile_type))
 		{
 			std::cerr << "Error. Unable to write caustic info to file " << outfile_prefix << "ccf_caustics" + outfile_type << "\n";
 			return -1;
@@ -757,118 +825,5 @@ int main(int argc, char* argv[])
 	if (cuda_error("cudaDeviceReset", false, __FILE__, __LINE__)) return -1;
 
 	return 0;
-}
-
-
-
-void display_usage(char* name)
-{
-	if (name)
-	{
-		std::cout << "Usage: " << name << " opt1 val1 opt2 val2 opt3 val3 ...\n";
-	}
-	else
-	{
-		std::cout << "Usage: programname opt1 val1 opt2 val2 opt3 val3 ...\n";
-	}
-	std::cout << "Options:\n"
-		<< "   -h,--help             Show this help message\n"
-		<< "   -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
-		<< "   -ks,--kappa_smooth    Specify the smooth convergence. Default value: " << kappa_smooth << "\n"
-		<< "   -s,--shear            Specify the shear. Default value: " << shear << "\n"
-		<< "   -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
-		<< "                         star in arbitrary units. Default value: " << theta_e << "\n"
-		<< "   -np,--num_phi         Specify the number of steps used to vary phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_phi << "\n"
-		<< "   -nb,--num_branches    Specify the number of branches to use for phi in the\n"
-		<< "                         range [0, 2*pi]. Default value: " << num_branches << "\n"
-		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
-		<< "                         Default value: " << num_stars << "\n"
-		<< "                         All stars are taken to be of unit mass. If a range of\n"
-		<< "                         masses are desired, please input them through a file\n"
-		<< "                         as described in the -sf option.\n"
-		<< "   -rs,--random_seed     Specify the random seed for the star field generation.\n"
-		<< "                         A value of 0 is reserved for star input files.\n"
-		<< "                         Default value: " << random_seed << "\n"
-		<< "   -sf,--starfile        Specify the location of a star positions and masses\n"
-		<< "                         file. Default value: " << starfile << "\n"
-		<< "                         The file may be either a whitespace delimited text\n"
-		<< "                         file containing valid values for a star's x\n"
-		<< "                         coordinate, y coordinate, and mass, in that order, on\n"
-		<< "                         each line, or a binary file of star structures (as\n"
-		<< "                         defined in this source code). If specified, the number\n"
-		<< "                         of stars is determined through this file and the -ns\n"
-		<< "                         option is ignored.\n"
-		<< "   -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
-		<< "                         are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
-		<< "   -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
-		<< "                         Default value: " << outfile_prefix << "\n"
-		<< "                         Lines of .txt output files are whitespace delimited.\n"
-		<< "                         Filenames are:\n"
-		<< "                            ccf_parameter_info   various parameter values used\n"
-		<< "                                                     in calculations\n"
-		<< "                            ccf_stars            the first item is num_stars\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     star structures\n"
-		<< "                            ccf_ccs              the first item is num_roots\n"
-		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi / num_branches + 1\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     complex critical curve\n"
-		<< "                                                     values\n"
-		<< "                            ccf_caustics         the first item is num_roots\n"
-		<< "                                                     and the second item is\n"
-		<< "                                                     num_phi / num_branches + 1\n"
-		<< "                                                     followed by binary\n"
-		<< "                                                     representations of the\n"
-		<< "                                                     complex caustic curve\n"
-		<< "                                                     values\n";
-}
-
-void print_progress(int icurr, int imax, int num_bars)
-{
-	std::cout << "\r[";
-	for (int i = 0; i < num_bars; i++)
-	{
-		if (i <= icurr * num_bars / imax)
-		{
-			std::cout << "=";
-		}
-		else
-		{
-			std::cout << " ";
-		}
-	}
-	std::cout << "] " << icurr * 100 / imax << " %";
-}
-
-bool cuda_error(const char* name, bool sync, const char* file, const int line)
-{
-	cudaError_t err = cudaGetLastError();
-	/*if the last error message is not a success, print the error code and msg
-	and return true (i.e., an error occurred)*/
-	if (err != cudaSuccess)
-	{
-		const char* errMsg = cudaGetErrorString(err);
-		std::cerr << "CUDA error check for " << name << " failed at " << file << ":" << line << "\n";
-		std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
-		return true;
-	}
-	/*if a device synchronization is also to be done*/
-	if (sync)
-	{
-		/*perform the same error checking as initially*/
-		err = cudaDeviceSynchronize();
-		if (err != cudaSuccess)
-		{
-			const char* errMsg = cudaGetErrorString(err);
-			std::cerr << "CUDA error check for cudaDeviceSynchronize failed at " << file << ":" << line << "\n";
-			std::cerr << "Error code: " << err << " (" << errMsg << ")\n";
-			return true;
-		}
-	}
-	return false;
 }
 

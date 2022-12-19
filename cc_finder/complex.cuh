@@ -13,19 +13,51 @@ public:
 	T re;
 	T im;
 
-	/*default constructor initializes complex number to zero*/
-	__host__ __device__ Complex(T real = 0, T imag = 0)
+	/*default constructor initializes the complex number to zero*/
+	__host__ __device__ Complex(T real = static_cast<T>(0), T imag = static_cast<T>(0))
 	{
 		re = real;
 		im = imag;
 	}
 
+	/*copy constructors*/
+	template <typename U> __host__ __device__ Complex(const Complex<U>& c1)
+	{
+		re = static_cast<T>(c1.re);
+		im = static_cast<T>(c1.im);
+	}
+	template <typename U> __host__ __device__ Complex(const U& num)
+	{
+		re = static_cast<T>(num);
+		im = static_cast<T>(0);
+	}
+
+	/*assignment operators*/
+	template <typename U> __host__ __device__ Complex& operator=(const Complex<U>& c1)
+	{
+		if (this == &c1)
+		{
+			return *this;
+		}
+
+		re = static_cast<T>(c1.re);
+		im = static_cast<T>(c1.im);
+		return *this;
+	}
+	template <typename U> __host__ __device__ Complex& operator=(U num)
+	{
+		re = static_cast<T>(num);
+		im = static_cast<T>(0);
+		return *this;
+	}
+
+	/*complex conjugate of the complex number*/
 	__host__ __device__ Complex conj()
 	{
 		return Complex(re, -im);
 	}
 
-	/*sqrt(re*re + im*im)*/
+	/*norm of the complex number = sqrt(re*re + im*im)*/
 	__host__ __device__ T abs()
 	{
 		/*use device or host square root function*/
@@ -36,38 +68,39 @@ public:
 		#endif
 	}
 
-	/*argument of number in range [-pi, pi]*/
+	/*argument of the complex number in the range [-pi, pi]*/
 	__host__ __device__ T arg()
 	{
-		#ifdef CUDA_ARCH
-			return atan2(im, re);
-		#else
-			return std::atan2(im, re);
-		#endif
+#ifdef CUDA_ARCH
+		return atan2(im, re);
+#else
+		return std::atan2(im, re);
+#endif
 	}
-	
+
 	/*exponential of the complex number*/
-	__host__ __device__ T exp()
+	__host__ __device__ Complex exp()
 	{
-		#ifdef CUDA_ARCH
-			return Complex(exp(re)*cos(im),exp(re)*sin(im));
-		#else
-			return Complex(std::exp(re) * std::cos(im), std::exp(re) * std::sin(im));
-		#endif
+#ifdef CUDA_ARCH
+		return Complex(exp(re) * cos(im), exp(re) * sin(im));
+#else
+		return Complex(std::exp(re) * std::cos(im), std::exp(re) * std::sin(im));
+#endif
 	}
 
 	/*logarithm of the complex number*/
-	__host__ __device__ T log()
+	__host__ __device__ Complex log()
 	{
 		T abs = (*this).abs();
 		T arg = (*this).arg();
-		#ifdef CUDA_ARCH
-			return Complex(log(abs), arg);
-		#else
-			return Complex(std::log(abs), arg);
-		#endif
+#ifdef CUDA_ARCH
+		return Complex(log(abs), arg);
+#else
+		return Complex(std::log(abs), arg);
+#endif
 	}
 
+	/*positive and negative operators*/
 	__host__ __device__ Complex operator+()
 	{
 		return Complex(re, im);

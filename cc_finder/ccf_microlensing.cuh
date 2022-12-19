@@ -306,8 +306,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 
 	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < 0.000000001 &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < static_cast<T>(0.000000001) &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < static_cast<T>(0.000000001))
 	{
 		return z;
 	}
@@ -362,8 +362,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 
 	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar))) < 0.000000001 &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar))) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001) &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001))
 	{
 		return z;
 	}
@@ -516,7 +516,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
 
 					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
-					if (norm < 0.000000001)
+					if (norm < static_cast<T>(0.000000001))
 					{
 						fin[c * 2 * nroots + b * nroots + a] = true;
 					}
@@ -598,7 +598,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
 
 					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
-					if (norm < 0.000000001)
+					if (norm < static_cast<T>(0.000000001))
 					{
 						fin[c * 2 * nroots + b * nroots + a] = true;
 					}

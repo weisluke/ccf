@@ -182,7 +182,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param phi -- value of the variable parametrizing z
 
 \return theta^2 * sum( m_i / (z-z_i)^2 ) + gamma
-		- (1 - kappa + kappastar)) * e^(-i*phi)
+        - (1 - kappa + kappastar)) * e^(-i*phi)
 *************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi)
@@ -216,7 +216,7 @@ a rectangular star field with respect to z
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
 
-\return -2 * theta^2 * sum( m_i / (z-z_i)^3 )
+\return -2 * theta^2 * sum( m_i / (z-z_i)^3 ) - (d2alpha_dzbar2)bar
 *********************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)

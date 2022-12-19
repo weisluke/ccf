@@ -23,7 +23,8 @@ Email: weisluke@alum.mit.edu
 using dtype = double;
 
 /*constants to be used*/
-constexpr int OPTS_SIZE = 2 * 12;
+const dtype PI = static_cast<dtype>(3.1415926535898);
+constexpr int OPTS_SIZE = 2 * 13;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -31,6 +32,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-s", "--shear",
 	"-t", "--theta_e",
 	"-ks", "--kappa_star",
+	"-r", "--rectangular",
 	"-ns", "--num_stars",
 	"-sf", "--starfile",
 	"-np", "--num_phi",
@@ -46,6 +48,7 @@ dtype kappa_tot = static_cast<dtype>(0.3);
 dtype shear = static_cast<dtype>(0.3);
 dtype theta_e = static_cast<dtype>(1);
 dtype kappa_star = static_cast<dtype>(0.27);
+int rectangular = 1;
 int num_stars = 137;
 std::string starfile = "";
 int num_phi = 50;
@@ -88,6 +91,8 @@ void display_usage(char* name)
 		<< "                         point lens in arbitrary units. Default value: " << theta_e << "\n"
 		<< "   -ks,--kappa_star      Specify the convergence in point mass lenses.\n"
 		<< "                         Default value: " << kappa_star << "\n"
+		<< "   -r,--rectangular      Specify whether the star field should be\n"
+		<< "                         rectangular (1) or circular (0). Default value: " << rectangular << "\n"
 		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
 		<< "                         Default value: " << num_stars << "\n"
 		<< "                         All stars are taken to be of unit mass. If a range of\n"
@@ -280,6 +285,23 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
+		else if (argv[i] == std::string("-r") || argv[i] == std::string("--rectangular"))
+		{
+			try
+			{
+				rectangular = std::stoi(cmdinput);
+				if (rectangular != 0 && rectangular != 1)
+				{
+					std::cerr << "Error. Invalid rectangular input. rectangular must be 1 (rectangular) or 0 (circular).\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid rectangular input.\n";
+				return -1;
+			}
+		}
 		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
 		{
 			try
@@ -403,7 +425,11 @@ int main(int argc, char* argv[])
 
 	std::cout << "Number of stars used: " << num_stars << "\n";
 
-	/*radius needed for number of stars*/
+	Complex<dtype> c = std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
+		* Complex<dtype>(
+			std::sqrt(std::abs((1 - kappa_tot - shear) / (1 - kappa_tot + shear))),
+			std::sqrt(std::abs((1 - kappa_tot + shear) / (1 - kappa_tot - shear)))
+			);
 	dtype rad = std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star);
 
 	/*number of roots to be found*/
@@ -470,11 +496,25 @@ int main(int argc, char* argv[])
 		uses default star mass of 1.0*/
 		if (random_seed != 0)
 		{
-			generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1), random_seed);
+			if (rectangular)
+			{
+				generate_rectangular_star_field<dtype>(stars, num_stars, c, static_cast<dtype>(1), random_seed);
+			}
+			else
+			{
+				generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1), random_seed);
+			}
 		}
 		else
 		{
-			random_seed = generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1));
+			if (rectangular)
+			{
+				random_seed = generate_rectangular_star_field<dtype>(stars, num_stars, c, static_cast<dtype>(1));
+			}
+			else
+			{
+				random_seed = generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1));
+			}
 		}
 
 		std::cout << "Done generating star field.\n";
@@ -569,7 +609,14 @@ int main(int argc, char* argv[])
 		print_progress(i, num_iters - 1);
 
 		/*start kernel and perform error checking*/
-		find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		if (rectangular)
+		{
+			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		}
+		else
+		{
+			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		}
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 
@@ -581,7 +628,14 @@ int main(int argc, char* argv[])
 
 
 	/*calculate errors in 1/mu for initial roots*/
-	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 0, num_phi, num_branches, errs);
+	if (rectangular)
+	{
+		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
+	}
+	else
+	{
+		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 0, num_phi, num_branches, errs);
+	}
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
 	has_nan_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
@@ -632,7 +686,14 @@ int main(int argc, char* argv[])
 		/*solve roots for current values of j*/
 		for (int i = 0; i < num_iters; i++)
 		{
-			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			if (rectangular)
+			{
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			}
+			else
+			{
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			}
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -659,7 +720,14 @@ int main(int argc, char* argv[])
 
 	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, j, num_phi, num_branches, errs);
+		if (rectangular)
+		{
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
+		}
+		else
+		{
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, j, num_phi, num_branches, errs);
+		}
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
@@ -713,7 +781,14 @@ int main(int argc, char* argv[])
 
 	std::cout << "\nFinding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, caustics);
+	if (rectangular)
+	{
+		find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
+	}
+	else
+	{
+		find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, caustics);
+	}
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -743,7 +818,15 @@ int main(int argc, char* argv[])
 	outfile << "mean_mass " << mean_mass << "\n";
 	outfile << "mean_squared_mass " << mean_squared_mass << "\n";
 	outfile << "num_stars " << num_stars << "\n";
-	outfile << "rad " << rad << "\n";
+	if (rectangular)
+	{
+		outfile << "corner_x1 " << c.re << "\n";
+		outfile << "corner_x2 " << c.im << "\n";
+	}
+	else
+	{
+		outfile << "rad " << rad << "\n";
+	}
 	outfile << "num_roots " << num_roots << "\n";
 	outfile << "num_phi " << num_phi << "\n";
 	outfile << "num_branches " << num_branches << "\n";

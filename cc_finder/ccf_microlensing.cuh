@@ -16,11 +16,11 @@ __device__ T heaviside(T x)
 {
 	if (x > 0)
 	{
-		return static_cast<T> (1);
+		return static_cast<T>(1);
 	}
 	else
 	{
-		return static_cast<T> (0);
+		return static_cast<T>(0);
 	}
 }
 
@@ -39,11 +39,11 @@ __device__ T boxcar(Complex<T> z, Complex<T> corner)
 {
 	if (-corner.re < z.re && z.re < corner.re && -corner.im < z.im && z.im < corner.im)
 	{
-		return static_cast<T> (1);
+		return static_cast<T>(1);
 	}
 	else
 	{
-		return static_cast<T> (0);
+		return static_cast<T>(0);
 	}
 }
 
@@ -60,13 +60,13 @@ lens equation for a rectangular star field
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
 
-\return w = (1-kappa)*z + gamma*z_bar
-            - theta^2 * sum(m_i/(z-z_i)_bar) - alpha_smooth
+\return w = (1 - kappa) * z + gamma * z_bar
+			- theta^2 * sum(m_i / (z - z_i)_bar) - alpha_smooth
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
 {
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> starsum;
 
 	/*sum m_i/(z-z_i)*/
@@ -102,8 +102,8 @@ lens equation for a circular star field
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 
-\return w = (1-(kappa-kappastar))*z + gamma*z_bar
-            - theta^2 * sum(m_i/(z-z_i)_bar)
+\return w = (1 - kappa + kappastar) * z + gamma * z_bar
+			- theta^2 * sum(m_i / (z - z_i)_bar)
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar)
@@ -123,7 +123,7 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 	return (1 - kappa + kappastar) * z + gamma * z.conj() - starsum.conj();
 }
 
-/*************************************************************************
+/******************************************************************************
 parametric critical curve equation for a rectangular star field
 we seek the values of z that make this equation equal to 0 for a given phi
 
@@ -138,13 +138,13 @@ we seek the values of z that make this equation equal to 0 for a given phi
 				 rectangular field of point mass lenses
 \param phi -- value of the variable parametrizing z
 
-\return gamma + theta^2 * sum( m_i / (z-z_i)^2 ) - (dalpha/dzbar)bar
-        - (1 - kappa + kappastar*boxcar(z))) * e^(-i*phi)
-*************************************************************************/
+\return gamma + theta^2 * sum(m_i / (z - z_i)^2) - (dalpha_smooth / dz_bar)_bar
+        - (1 - kappa + kappastar * boxcar(z, corner)) * e^(-i * phi)
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, T phi)
 {
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> starsum;
 
 	/*sum m_i/(z-z_i)^2*/
@@ -161,11 +161,11 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	Complex<T> c3 = -corner - z.conj();
 	Complex<T> c4 = -corner.conj() - z.conj();
 
-	Complex<T> dalpha_dzbar = Complex<T>(0, -kappastar / PI) * (c1.log() - c2.log() - c3.log() + c4.log())
+	Complex<T> dalpha_smooth_dz_bar = Complex<T>(0, -kappastar / PI) * (c1.log() - c2.log() - c3.log() + c4.log())
 		- kappastar * boxcar(z, corner);
 
 	/*gamma+starsum-(1-kappa+kappastar*boxcar))*e^(-i*phi)*/
-	return gamma + starsum - dalpha_dzbar.conj() - (1 - kappa + kappastar * boxcar(z, corner)) * Complex<T>(cos(phi), -sin(phi));
+	return gamma + starsum - dalpha_smooth_dz_bar.conj() - (1 - kappa + kappastar * boxcar(z, corner)) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /*************************************************************************
@@ -181,8 +181,8 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param kappastar -- convergence in point mass lenses
 \param phi -- value of the variable parametrizing z
 
-\return theta^2 * sum( m_i / (z-z_i)^2 ) + gamma
-        - (1 - kappa + kappastar)) * e^(-i*phi)
+\return theta^2 * sum(m_i / (z - z_i)^2) + gamma
+        - (1 - kappa + kappastar) * e^(-i * phi)
 *************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi)
@@ -202,7 +202,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	return gamma + starsum - (1 - kappa + kappastar) * Complex<T>(cos(phi), -sin(phi));
 }
 
-/*********************************************************************
+/********************************************************************
 derivative of the parametric critical curve equation for
 a rectangular star field with respect to z
 
@@ -216,12 +216,13 @@ a rectangular star field with respect to z
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
 
-\return -2 * theta^2 * sum( m_i / (z-z_i)^3 ) - (d2alpha_dzbar2)bar
-*********************************************************************/
+\return -2 * theta^2 * sum(m_i / (z - z_i)^3)
+        - (d^2alpha_smooth / dz_bar^2)_bar
+********************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
 {
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> starsum;
 
 	/*sum m_i/(z-z_i)^3*/
@@ -238,10 +239,10 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 	Complex<T> c3 = -corner - z.conj();
 	Complex<T> c4 = -corner.conj() - z.conj();
 
-	Complex<T> d2alpha_dzbar2 = Complex<T>(0, -kappastar / PI) * (-1 / c1 + 1 / c2 + 1 / c3 - 1 / c4);
+	Complex<T> d2alpha_smooth_dz_bar2 = Complex<T>(0, -kappastar / PI) * (-1 / c1 + 1 / c2 + 1 / c3 - 1 / c4);
 
 	/*-2*starsum - (d2alpha_dzbar2)bar*/
-	return -2 * starsum - d2alpha_dzbar2.conj();
+	return -2 * starsum - d2alpha_smooth_dz_bar2.conj();
 }
 
 /*********************************************************************
@@ -256,7 +257,7 @@ a circular star field with respect to z
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 
-\return -2 * theta^2 * sum( m_i / (z-z_i)^3 )
+\return -2 * theta^2 * sum(m_i / (z - z_i)^3)
 *********************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar)
@@ -478,7 +479,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	T norm;
 	int sgn;
 
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	T dphi = 2 * PI / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)
@@ -560,7 +561,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	T norm;
 	int sgn;
 
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	T dphi = 2 * PI / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)
@@ -642,7 +643,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 
 	int sgn;
 	
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	T dphi = 2 * PI / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)
@@ -703,7 +704,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 
 	int sgn;
 
-	T PI = static_cast<T> (3.1415926535898);
+	T PI = static_cast<T>(3.1415926535898);
 	T dphi = 2 * PI / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)

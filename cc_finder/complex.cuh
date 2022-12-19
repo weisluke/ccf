@@ -35,11 +35,6 @@ public:
 	/*assignment operators*/
 	template <typename U> __host__ __device__ Complex& operator=(const Complex<U>& c1)
 	{
-		if (this == &c1)
-		{
-			return *this;
-		}
-
 		re = static_cast<T>(c1.re);
 		im = static_cast<T>(c1.im);
 		return *this;
@@ -61,11 +56,11 @@ public:
 	__host__ __device__ T abs()
 	{
 		/*use device or host square root function*/
-		#ifdef CUDA_ARCH
-			return sqrt(re * re + im * im);
-		#else
-			return std::sqrt(re * re + im * im);
-		#endif
+#ifdef CUDA_ARCH
+		return sqrt(re * re + im * im);
+#else
+		return std::sqrt(re * re + im * im);
+#endif
 	}
 
 	/*argument of the complex number in the range [-pi, pi]*/

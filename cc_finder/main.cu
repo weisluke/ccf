@@ -52,7 +52,7 @@ dtype theta_e = static_cast<dtype>(1);
 dtype kappa_star = static_cast<dtype>(0.27);
 int rectangular = 1;
 int approx = 1;
-int taylor = 2;
+int taylor = 1;
 int num_stars = 137;
 std::string starfile = "";
 int num_phi = 50;
@@ -332,9 +332,9 @@ int main(int argc, char* argv[])
 			try
 			{
 				taylor = std::stoi(cmdinput);
-				if (taylor < 1 || taylor % 2 != 0)
+				if (taylor < 1)
 				{
-					std::cerr << "Error. Invalid taylor input. taylor must be an even integer integer > 0\n";
+					std::cerr << "Error. Invalid taylor input. taylor must be an integer > 0\n";
 					return -1;
 				}
 			}

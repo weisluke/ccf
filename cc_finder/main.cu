@@ -478,7 +478,7 @@ int main(int argc, char* argv[])
 	int num_roots = 2 * num_stars;
 	if (rectangular && approx)
 	{
-		num_roots += taylor;
+		num_roots += static_cast<int>(taylor / 2) * 2;
 	}
 
 
@@ -599,11 +599,12 @@ int main(int argc, char* argv[])
 			ccs_init[center + i ] = stars[i].position + 1;
 			ccs_init[center + i + num_stars] = stars[i].position - 1;
 		}
-		if (approx)
+		if (rectangular && approx)
 		{
-			for (int i = 0; i < taylor; i++)
+			int nroots_extra = static_cast<int>(taylor / 2) * 2;
+			for (int i = 0; i < nroots_extra; i++)
 			{
-				ccs_init[center + 2 * num_stars + i] = c.abs() * Complex<dtype>(std::cos(2 * PI / taylor * i), std::sin(2 * PI / taylor * i));
+				ccs_init[center + 2 * num_stars + i] = c.abs() * Complex<dtype>(std::cos(2 * PI / nroots_extra * i), std::sin(2 * PI / nroots_extra * i));
 			}
 		}
 	}

@@ -138,7 +138,7 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 	Complex<T> alpha_smooth = (-(corner.conj() - z.conj()) * (corner.conj().log() - s1) + (corner - z.conj()) * (corner.log() - s2)
 		+ (-corner - z.conj()) * ((-corner).log() - s3) - (-corner.conj() - z.conj()) * ((-corner).conj().log() - s4));
 	alpha_smooth *= Complex<T>(0, -kappastar / PI);
-	alpha_smooth -= kappastar * 2 * (corner.re + z.re);
+	alpha_smooth -= kappastar * (corner + corner.conj() + z + z.conj());
 
 	/*(1-kappa)*z+gamma*z_bar-starsum_bar-alpha_smooth*/
 	return (1 - kappa) * z + gamma * z.conj() - starsum.conj() - alpha_smooth;
@@ -256,32 +256,25 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	Complex<T> r1 = z.conj() / corner.conj();
-	Complex<T> r2 = z.conj() / corner;
-	Complex<T> r3 = z.conj() / -corner;
-	Complex<T> r4 = z.conj() / -corner.conj();
+	Complex<T> r1 = z.conj() / corner;
+	Complex<T> r2 = z.conj() / corner.conj();
 
-	Complex<T> s1;
-	Complex<T> s2;
-	Complex<T> s3;
-	Complex<T> s4;
+	Complex<T> dalpha_smooth_dz_bar;
 
-	for (int i = 1; i <= taylor; i++)
+	for (int i = 2; i <= taylor; i += 2)
 	{
-		s1 += r1.pow(i) / i;
-		s2 += r2.pow(i) / i;
-		s3 += r3.pow(i) / i;
-		s4 += r4.pow(i) / i;
+		dalpha_smooth_dz_bar += (r1.pow(i) - r2.pow(i)) / i;
+	}
+	dalpha_smooth_dz_bar *= 2;
+
+	if (taylor % 2 == 0)
+	{
+		dalpha_smooth_dz_bar += r1.pow(taylor) * 2;
+		dalpha_smooth_dz_bar -= r2.pow(taylor) * 2;
 	}
 
-	Complex<T> dalpha_smooth_dz_bar = (
-		corner.conj() * (1 - r1.pow(taylor)) + (corner.conj().log() - s1)
-		- corner * (1 - r2.pow(taylor)) - (corner.log() - s2)
-		+ corner * (1 - r3.pow(taylor)) - ((-corner).log() - s3)
-		- corner.conj() * (1 - r4.pow(taylor)) + ((-corner).conj().log() - s4)
-		);
 	dalpha_smooth_dz_bar *= Complex<T>(0, -kappastar / PI);
-	dalpha_smooth_dz_bar -= kappastar;
+	dalpha_smooth_dz_bar += kappastar - 4 * kappastar * corner.arg() / PI;
 
 	/*gamma+starsum-(1-kappa+kappastar*boxcar))*e^(-i*phi)*/
 	return gamma + starsum - dalpha_smooth_dz_bar.conj() - (1 - kappa + kappastar) * Complex<T>(cos(phi), -sin(phi));
@@ -397,17 +390,23 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	Complex<T> r1 = z.conj() / corner.conj();
-	Complex<T> r2 = z.conj() / corner;
-	Complex<T> r3 = z.conj() / -corner;
-	Complex<T> r4 = z.conj() / -corner.conj();
+	Complex<T> r1 = z.conj() / corner;
+	Complex<T> r2 = z.conj() / corner.conj();
 
-	Complex<T> d2alpha_smooth_dz_bar2 = (
-		-corner.conj() * taylor * r1.pow(taylor - 1) - (1 - r1.pow(taylor)) / (1 - r1)
-		+ corner * taylor * r2.pow(taylor - 1) + (1 - r2.pow(taylor)) / (1 - r2)
-		- corner * taylor * r3.pow(taylor - 1) + (1 - r3.pow(taylor)) / (1 - r3)
-		+ corner.conj() * taylor * r4.pow(taylor - 1) - (1 - r4.pow(taylor)) / (1 - r4)
-		);
+	Complex<T> d2alpha_smooth_dz_bar2;
+
+	for (int i = 2; i <= taylor; i += 2)
+	{
+		d2alpha_smooth_dz_bar2 += (r1.pow(i - 1) / corner - r2.pow(i - 1) / corner.conj());
+	}
+	d2alpha_smooth_dz_bar2 *= 2;
+
+	if (taylor % 2 == 0)
+	{
+		d2alpha_smooth_dz_bar2 += taylor / corner * r1.pow(taylor - 1) * 2;
+		d2alpha_smooth_dz_bar2 -= taylor / corner.conj() * r2.pow(taylor - 1) * 2;
+	}
+
 	d2alpha_smooth_dz_bar2 *= Complex<T>(0, -kappastar / PI);
 
 	/*-2*starsum - (d2alpha_dzbar2)bar*/

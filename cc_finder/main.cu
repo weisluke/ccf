@@ -24,7 +24,7 @@ using dtype = double;
 
 /*constants to be used*/
 const dtype PI = static_cast<dtype>(3.1415926535898);
-constexpr int OPTS_SIZE = 2 * 13;
+constexpr int OPTS_SIZE = 2 * 15;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -33,6 +33,8 @@ const std::string OPTS[OPTS_SIZE] =
 	"-t", "--theta_e",
 	"-ks", "--kappa_star",
 	"-r", "--rectangular",
+	"-a", "--approx",
+	"-ts", "--taylor",
 	"-ns", "--num_stars",
 	"-sf", "--starfile",
 	"-np", "--num_phi",
@@ -49,6 +51,8 @@ dtype shear = static_cast<dtype>(0.3);
 dtype theta_e = static_cast<dtype>(1);
 dtype kappa_star = static_cast<dtype>(0.27);
 int rectangular = 1;
+int approx = 1;
+int taylor = 1;
 int num_stars = 137;
 std::string starfile = "";
 int num_phi = 50;
@@ -93,6 +97,10 @@ void display_usage(char* name)
 		<< "                         Default value: " << kappa_star << "\n"
 		<< "   -r,--rectangular      Specify whether the star field should be\n"
 		<< "                         rectangular (1) or circular (0). Default value: " << rectangular << "\n"
+		<< "   -a,--approx           Specify whether terms for alpha_smooth should be\n"
+		<< "                         approximated (1) or exact (0). Default value: " << approx << "\n"
+		<< "   -ts,--taylor          Specify the highest degree for the Taylor series of\n"
+		<< "                         alpha_smooth. Default value: " << taylor << "\n"
 		<< "   -ns,--num_stars       Specify the number of stars desired.\n"
 		<< "                         Default value: " << num_stars << "\n"
 		<< "                         All stars are taken to be of unit mass. If a range of\n"
@@ -210,7 +218,7 @@ int main(int argc, char* argv[])
 	{
 		if (!cmd_option_valid(OPTS, OPTS + OPTS_SIZE, argv[i]))
 		{
-			std::cerr << "Error. Invalid option input.\n";
+			std::cerr << "Error. Invalid input syntax. Unknown option " << argv[i] << "\n";
 			display_usage(argv[0]);
 			return -1;
 		}
@@ -299,6 +307,40 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid rectangular input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-a") || argv[i] == std::string("--approx"))
+		{
+			try
+			{
+				approx = std::stoi(cmdinput);
+				if (approx != 0 && approx != 1)
+				{
+					std::cerr << "Error. Invalid approx input. approx must be 1 (approximate) or 0 (exact).\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid approx input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ts") || argv[i] == std::string("--taylor"))
+		{
+			try
+			{
+				taylor = std::stoi(cmdinput);
+				if (taylor < 1)
+				{
+					std::cerr << "Error. Invalid taylor input. taylor must be an integer > 0\n";
+					return -1;
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid taylor input.\n";
 				return -1;
 			}
 		}
@@ -434,6 +476,10 @@ int main(int argc, char* argv[])
 
 	/*number of roots to be found*/
 	int num_roots = 2 * num_stars;
+	if (rectangular && approx)
+	{
+		num_roots += static_cast<int>(taylor / 2) * 2;
+	}
 
 
 	/**********************
@@ -547,11 +593,19 @@ int main(int argc, char* argv[])
 	/*initialize roots for centers of all branches to lie at starpos +/- 1*/
 	for (int j = 0; j < num_branches; j++)
 	{
+		int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
 		for (int i = 0; i < num_stars; i++)
 		{
-			int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
 			ccs_init[center + i ] = stars[i].position + 1;
 			ccs_init[center + i + num_stars] = stars[i].position - 1;
+		}
+		if (rectangular && approx)
+		{
+			int nroots_extra = static_cast<int>(taylor / 2) * 2;
+			for (int i = 0; i < nroots_extra; i++)
+			{
+				ccs_init[center + 2 * num_stars + i] = c.abs() * Complex<dtype>(std::cos(2 * PI / nroots_extra * i), std::sin(2 * PI / nroots_extra * i));
+			}
 		}
 	}
 
@@ -611,7 +665,14 @@ int main(int argc, char* argv[])
 		/*start kernel and perform error checking*/
 		if (rectangular)
 		{
-			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+			if (approx)
+			{
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+			}
+			else
+			{
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+			}
 		}
 		else
 		{
@@ -630,7 +691,14 @@ int main(int argc, char* argv[])
 	/*calculate errors in 1/mu for initial roots*/
 	if (rectangular)
 	{
-		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
+		if (approx)
+		{
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, 0, num_phi, num_branches, errs);
+		}
+		else
+		{
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
+		}
 	}
 	else
 	{
@@ -688,7 +756,14 @@ int main(int argc, char* argv[])
 		{
 			if (rectangular)
 			{
-				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
+				if (approx)
+				{
+					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
+				}
+				else
+				{
+					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
+				}
 			}
 			else
 			{
@@ -722,7 +797,14 @@ int main(int argc, char* argv[])
 	{
 		if (rectangular)
 		{
-			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
+			if (approx)
+			{
+				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, j, num_phi, num_branches, errs);
+			}
+			else
+			{
+				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
+			}
 		}
 		else
 		{
@@ -759,7 +841,7 @@ int main(int argc, char* argv[])
 	/*redefine thread and block size to maximize parallelization*/
 	num_threads_z = 1;
 	num_threads_y = 1;
-	num_threads_x = 1024;
+	num_threads_x = 512;
 
 	num_blocks_z = 1;
 	num_blocks_y = 1;
@@ -783,7 +865,14 @@ int main(int argc, char* argv[])
 	starttime = std::chrono::high_resolution_clock::now();
 	if (rectangular)
 	{
-		find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
+		if (approx)
+		{
+			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, caustics);
+		}
+		else
+		{
+			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
+		}
 	}
 	else
 	{
@@ -822,6 +911,10 @@ int main(int argc, char* argv[])
 	{
 		outfile << "corner_x1 " << c.re << "\n";
 		outfile << "corner_x2 " << c.im << "\n";
+		if (approx)
+		{
+			outfile << "taylor " << taylor << "\n";
+		}
 	}
 	else
 	{

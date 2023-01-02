@@ -61,7 +61,7 @@ lens equation for a rectangular star field
 				 rectangular field of point mass lenses
 
 \return w = (1 - kappa) * z + gamma * z_bar
-            - theta^2 * sum(m_i / (z - z_i)_bar) - alpha_smooth
+			- theta^2 * sum(m_i / (z - z_i)_bar) - alpha_smooth
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
@@ -78,12 +78,12 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	Complex<T> c1 = corner.conj() - z.conj();
-	Complex<T> c2 = corner - z.conj();
+	Complex<T> c1 = corner - z.conj();
+	Complex<T> c2 = corner.conj() - z.conj();
 	Complex<T> c3 = -corner - z.conj();
 	Complex<T> c4 = -corner.conj() - z.conj();
 
-	Complex<T> alpha_smooth = Complex<T>(0, -kappastar / PI) * (-c1 * c1.log() + c2 * c2.log() + c3 * c3.log() - c4 * c4.log())
+	Complex<T> alpha_smooth = Complex<T>(0, -kappastar / PI) * (c1 * c1.log() - c2 * c2.log() + c3 * c3.log() - c4 * c4.log())
 		- kappastar * 2 * (corner.re + z.re) * boxcar(z, corner)
 		- kappastar * 4 * corner.re * heaviside(corner.im + z.im) * heaviside(corner.im - z.im) * heaviside(z.re - corner.re);
 
@@ -92,7 +92,7 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 }
 
 /********************************************************************
-approximate lens equation for a rectangular star field
+lens equation for a rectangular star field with approximations
 
 \param z -- complex image plane position
 \param kappa -- total convergence
@@ -157,7 +157,7 @@ lens equation for a circular star field
 \param kappastar -- convergence in point mass lenses
 
 \return w = (1 - kappa + kappastar) * z + gamma * z_bar
-            - theta^2 * sum(m_i / (z - z_i)_bar)
+			- theta^2 * sum(m_i / (z - z_i)_bar)
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar)
@@ -173,7 +173,7 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*(1-(kappa-kappastar))*z+gamma*z_bar-starsum_bar*/
+	/*(1-kappa+kappastar)*z+gamma*z_bar-starsum_bar*/
 	return (1 - kappa + kappastar) * z + gamma * z.conj() - starsum.conj();
 }
 
@@ -218,7 +218,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	Complex<T> dalpha_smooth_dz_bar = Complex<T>(0, -kappastar / PI) * (c1.log() - c2.log() - c3.log() + c4.log())
 		- kappastar * boxcar(z, corner);
 
-	/*gamma+starsum-(1-kappa+kappastar*boxcar))*e^(-i*phi)*/
+	/*gamma+starsum-(dalpha_smooth/dz_bar)_bar-(1-kappa+kappastar*boxcar)*e^(-i*phi)*/
 	return gamma + starsum - dalpha_smooth_dz_bar.conj() - (1 - kappa + kappastar * boxcar(z, corner)) * Complex<T>(cos(phi), -sin(phi));
 }
 
@@ -240,7 +240,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param phi -- value of the variable parametrizing z
 
 \return gamma + theta^2 * sum(m_i / (z - z_i)^2) - (dalpha_smooth / dz_bar)_bar
-		- (1 - kappa + kappastar * boxcar(z, corner)) * e^(-i * phi)
+		- (1 - kappa + kappastar) * e^(-i * phi)
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, T phi)
@@ -277,7 +277,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	dalpha_smooth_dz_bar *= Complex<T>(0, -kappastar / PI);
 	dalpha_smooth_dz_bar += kappastar - 4 * kappastar * corner.arg() / PI;
 
-	/*gamma+starsum-(1-kappa+kappastar*boxcar))*e^(-i*phi)*/
+	/*gamma+starsum-(dalpha_smooth/dz_bar)_bar-(1-kappa+kappastar)*e^(-i*phi)*/
 	return gamma + starsum - dalpha_smooth_dz_bar.conj() - (1 - kappa + kappastar) * Complex<T>(cos(phi), -sin(phi));
 }
 
@@ -294,7 +294,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param kappastar -- convergence in point mass lenses
 \param phi -- value of the variable parametrizing z
 
-\return theta^2 * sum(m_i / (z - z_i)^2) + gamma
+\return gamma + theta^2 * sum(m_i / (z - z_i)^2)
         - (1 - kappa + kappastar) * e^(-i * phi)
 *************************************************************************/
 template <typename T>
@@ -311,7 +311,7 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	/*theta_e^2 * starsum*/
 	starsum *= (theta * theta);
 
-	/*gamma+starsum-(1-kappasmooth)*e^(-i*phi)*/
+	/*gamma+starsum-(1-kappa+kappastar)*e^(-i*phi)*/
 	return gamma + starsum - (1 - kappa + kappastar) * Complex<T>(cos(phi), -sin(phi));
 }
 
@@ -446,7 +446,7 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 	return -2 * starsum;
 }
 
-/************************************************************
+/********************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 for a rectangular star field
@@ -467,7 +467,7 @@ for a rectangular star field
 \param nroots -- number of roots in array
 
 \return z_new -- updated value of the root z
-************************************************************/
+********************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, T phi, Complex<T>* roots, int nroots)
 {
@@ -504,7 +504,7 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	return z - 1 / result;
 }
 
-/************************************************************
+/********************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 for a rectangular star field with approximations
@@ -526,7 +526,7 @@ for a rectangular star field with approximations
 \param nroots -- number of roots in array
 
 \return z_new -- updated value of the root z
-************************************************************/
+********************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, T phi, Complex<T>* roots, int nroots)
 {
@@ -563,7 +563,7 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	return z - 1 / result;
 }
 
-/************************************************************
+/********************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 for a circular star field
@@ -582,7 +582,7 @@ for a circular star field
 \param nroots -- number of roots in array
 
 \return z_new -- updated value of the root z
-************************************************************/
+********************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi, Complex<T>* roots, int nroots)
 {
@@ -671,7 +671,7 @@ __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi,
 	}
 }
 
-/*****************************************************************
+/********************************************************************
 find new critical curve roots for a rectangular star field
 
 \param kappa -- total convergence
@@ -690,7 +690,7 @@ find new critical curve roots for a rectangular star field
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
 			  array is of size nbranches * 2 * nroots
-*****************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
@@ -755,7 +755,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	}
 }
 
-/*****************************************************************
+/********************************************************************
 find new critical curve roots for a rectangular star field
 with approximations
 
@@ -776,7 +776,7 @@ with approximations
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
 			  array is of size nbranches * 2 * nroots
-*****************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
@@ -841,7 +841,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	}
 }
 
-/*****************************************************************
+/********************************************************************
 find new critical curve roots for a circular star field
 
 \param kappa -- total convergence
@@ -858,7 +858,7 @@ find new critical curve roots for a circular star field
 \param fin -- pointer to array of boolean values for whether roots
 			  have been found to sufficient accuracy
 			  array is of size nbranches * 2 * nroots
-*****************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
@@ -923,7 +923,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find maximum error in critical curve roots
 for a rectangular star field
 
@@ -942,7 +942,7 @@ for a rectangular star field
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
 			   array is of size nbranches * 2 * nroots
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int j, int nphi, int nbranches, T* errs)
 {
@@ -986,7 +986,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find maximum error in critical curve roots
 for a rectangular star field with approximations
 
@@ -1006,7 +1006,7 @@ for a rectangular star field with approximations
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
 			   array is of size nbranches * 2 * nroots
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, int j, int nphi, int nbranches, T* errs)
 {
@@ -1050,7 +1050,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find maximum error in critical curve roots
 for a circular star field
 
@@ -1067,7 +1067,7 @@ for a circular star field
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
 			   array is of size nbranches * 2 * nroots
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, int j, int nphi, int nbranches, T* errs)
 {
@@ -1153,7 +1153,7 @@ __global__ void max_err_kernel(T* errs, int nerrs)
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find caustics from critical curves for a rectangular star field
 
 \param z -- pointer to array of roots
@@ -1167,7 +1167,7 @@ find caustics from critical curves for a rectangular star field
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
 \param w -- pointer to array of caustic positions
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, Complex<T>* w)
 {
@@ -1181,7 +1181,7 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find caustics from critical curves for a rectangular star field
 with approximations
 
@@ -1197,7 +1197,7 @@ with approximations
 				 rectangular field of point mass lenses
 \param taylor -- degree of the taylor series for alpha_smooth
 \param w -- pointer to array of caustic positions
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, Complex<T>* w)
 {
@@ -1211,7 +1211,7 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 	}
 }
 
-/**************************************************************
+/********************************************************************
 find caustics from critical curves for a circular star field
 
 \param z -- pointer to array of roots
@@ -1223,7 +1223,7 @@ find caustics from critical curves for a circular star field
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param w -- pointer to array of caustic positions
-**************************************************************/
+********************************************************************/
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T>* w)
 {

@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
 	{
 		if (!cmd_option_valid(OPTS, OPTS + OPTS_SIZE, argv[i]))
 		{
-			std::cerr << "Error. Invalid option input.\n";
+			std::cerr << "Error. Invalid input syntax. Unknown option " << argv[i] << "\n";
 			display_usage(argv[0]);
 			return -1;
 		}
@@ -667,11 +667,11 @@ int main(int argc, char* argv[])
 		{
 			if (approx)
 			{
-				find_critical_curve_roots_kernel<dtype> << <blocks, threads >> > (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 			}
 			else
 			{
-				find_critical_curve_roots_kernel<dtype> << <blocks, threads >> > (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 			}
 		}
 		else
@@ -693,11 +693,11 @@ int main(int argc, char* argv[])
 	{
 		if (approx)
 		{
-			find_errors_kernel<dtype> << <blocks, threads >> > (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, 0, num_phi, num_branches, errs);
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, 0, num_phi, num_branches, errs);
 		}
 		else
 		{
-			find_errors_kernel<dtype> << <blocks, threads >> > (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
+			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
 		}
 	}
 	else
@@ -758,11 +758,11 @@ int main(int argc, char* argv[])
 			{
 				if (approx)
 				{
-					find_critical_curve_roots_kernel<dtype> << <blocks, threads >> > (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
+					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
 				}
 				else
 				{
-					find_critical_curve_roots_kernel<dtype> << <blocks, threads >> > (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
+					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
 				}
 			}
 			else
@@ -799,11 +799,11 @@ int main(int argc, char* argv[])
 		{
 			if (approx)
 			{
-				find_errors_kernel<dtype> << <blocks, threads >> > (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, j, num_phi, num_branches, errs);
+				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, j, num_phi, num_branches, errs);
 			}
 			else
 			{
-				find_errors_kernel<dtype> << <blocks, threads >> > (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
+				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
 			}
 		}
 		else
@@ -867,11 +867,11 @@ int main(int argc, char* argv[])
 	{
 		if (approx)
 		{
-			find_caustics_kernel<dtype> << <blocks, threads >> > (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, caustics);
+			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, caustics);
 		}
 		else
 		{
-			find_caustics_kernel<dtype> << <blocks, threads >> > (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
+			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches)* num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
 		}
 	}
 	else

@@ -12,6 +12,8 @@ Email: weisluke@alum.mit.edu
 #include "star.cuh"
 #include "util.hpp"
 
+#include <curand_kernel.h>
+
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -486,6 +488,9 @@ int main(int argc, char* argv[])
 	BEGIN memory allocation
 	**********************/
 
+	std::cout << "Beginning memory allocation...\n";
+
+	curandState* states = nullptr;
 	star<dtype>* stars = nullptr;
 	Complex<dtype>* ccs_init = nullptr;
 	Complex<dtype>* ccs = nullptr;
@@ -495,6 +500,8 @@ int main(int argc, char* argv[])
 	int* has_nan = nullptr;
 
 	/*allocate memory for stars*/
+	cudaMallocManaged(&states, num_stars * sizeof(curandState));
+	if (cuda_error("cudaMallocManaged(*states)", false, __FILE__, __LINE__)) return -1;
 	cudaMallocManaged(&stars, num_stars * sizeof(star<dtype>));
 	if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return -1;
 
@@ -522,9 +529,28 @@ int main(int argc, char* argv[])
 	cudaMallocManaged(&has_nan, sizeof(int));
 	if (cuda_error("cudaMallocManaged(*has_nan)", false, __FILE__, __LINE__)) return -1;
 
+	std::cout << "Done allocating memory.\n";
+
 	/********************
 	END memory allocation
 	********************/
+
+
+	/*number of threads per block, and number of blocks per grid
+	uses 512 for number of threads in x dimension, as 1024 is the
+	maximum allowable number of threads per block but is too large
+	for some memory allocation, and 512 is next power of 2 smaller*/
+
+	int num_threads_z = 1;
+	int num_threads_y = 1;
+	int num_threads_x = 512;
+
+	int num_blocks_z = 1;
+	int num_blocks_y = 1;
+	int num_blocks_x = static_cast<int>((num_stars - 1) / num_threads_x) + 1;
+
+	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
+	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
 
 
 	/**************************
@@ -537,31 +563,25 @@ int main(int argc, char* argv[])
 	{
 		std::cout << "Generating star field...\n";
 
-		/*generate random star field if no star file has been given
-		if random seed is provided, use it,
-		uses default star mass of 1.0*/
-		if (random_seed != 0)
+		/*if random seed was not provided, get one based on the time*/
+		if (random_seed == 0)
 		{
-			if (rectangular)
-			{
-				generate_rectangular_star_field<dtype>(stars, num_stars, c, static_cast<dtype>(1), random_seed);
-			}
-			else
-			{
-				generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1), random_seed);
-			}
+			random_seed = static_cast<int>(std::chrono::system_clock::now().time_since_epoch().count());
+		}
+
+		/*generate random star field if no star file has been given
+		uses default star mass of 1.0*/
+		initialize_curand_states_kernel<dtype> <<<blocks, threads>>> (states, num_stars, random_seed);
+		if (cuda_error("initialize_curand_states_kernel", true, __FILE__, __LINE__)) return -1;
+		if (rectangular)
+		{
+			generate_rectangular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, c, static_cast<dtype>(1));
 		}
 		else
 		{
-			if (rectangular)
-			{
-				random_seed = generate_rectangular_star_field<dtype>(stars, num_stars, c, static_cast<dtype>(1));
-			}
-			else
-			{
-				random_seed = generate_circular_star_field<dtype>(stars, num_stars, rad, static_cast<dtype>(1));
-			}
+			generate_circular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, rad, static_cast<dtype>(1));
 		}
+		if (cuda_error("generate_star_field_kernel", true, __FILE__, __LINE__)) return -1;
 
 		std::cout << "Done generating star field.\n";
 	}
@@ -585,6 +605,22 @@ int main(int argc, char* argv[])
 	/************************
 	END populating star array
 	************************/
+
+
+	/*redefine thread and block size to maximize parallelization
+	number of threads per block, and number of blocks per grid
+	uses empirical optimum values for maximum number of threads and blocks*/
+
+	num_threads_x = 32;
+
+	num_blocks_z = num_branches;
+	num_blocks_y = 2;
+	num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
+
+	blocks.x = num_blocks_x;
+	blocks.y = num_blocks_y;
+	blocks.z = num_blocks_z;
+	threads.x = num_threads_x;
 
 
 	/*set boolean (int) of errors having nan values to false (0)*/
@@ -622,21 +658,6 @@ int main(int argc, char* argv[])
 	{
 		errs[i] = static_cast<dtype>(0);
 	}
-
-	/*number of threads per block, and number of blocks per grid
-	uses empirical optimum values for maximum number of threads and blocks*/
-	
-	int num_threads_z = 1;
-	int num_threads_y = 1;
-	int num_threads_x = 32;
-
-	int num_blocks_z = num_branches;
-	int num_blocks_y = 2;
-	int num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
-	
-	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
-	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
-
 
 	/*number of iterations to use for root finding
 	empirically, 30 seems to be roughly the amount needed*/

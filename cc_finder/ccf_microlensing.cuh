@@ -292,82 +292,111 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param phi -- value of the variable parametrizing z
 
 \return gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
 		- (1 - kappa - d_alpha_smooth / dz) * e^(-i * phi)
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, T phi)
+__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor, T phi)
 {
-	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> d_alpha_star_d_zbar = d_star_deflection_d_zbar(z, theta, stars, nstars);
-	Complex<T> dalpha_smooth_dz = d_smooth_deflection_d_z(z, kappastar, 1, corner, 0, 1);
-	Complex<T> dalpha_smooth_dz_bar = d_smooth_deflection_d_zbar(z, kappastar, 1, corner, 0, 1);
+	Complex<T> dalpha_smooth_dz = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> dalpha_smooth_dz_bar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor);
 
-	/*gamma+starsum-(dalpha_smooth/dz_bar)_bar-(1-kappa+kappastar*boxcar)*e^(-i*phi)*/
-	return gamma - d_alpha_star_d_zbar.conj() - dalpha_smooth_dz_bar.conj() - (1 - kappa - dalpha_smooth_dz.conj()) * Complex<T>(cos(phi), -sin(phi));
-}
-
-/******************************************************************************
-parametric critical curve equation for a rectangular star field
-with approximations
-we seek the values of z that make this equation equal to 0 for a given phi
-
-\param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-\param phi -- value of the variable parametrizing z
-
-\return gamma + theta^2 * sum(m_i / (z - z_i)^2) - (dalpha_smooth / dz_bar)_bar
-		- (1 - kappa + kappastar) * e^(-i * phi)
-******************************************************************************/
-template <typename T>
-__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, T phi)
-{
-	T PI = static_cast<T>(3.1415926535898);
-	Complex<T> d_alpha_star_d_zbar = d_star_deflection_d_zbar(z, theta, stars, nstars);
-	Complex<T> dalpha_smooth_dz = d_smooth_deflection_d_z(z, kappastar, 1, corner, 1, taylor);
-	Complex<T> dalpha_smooth_dz_bar = d_smooth_deflection_d_zbar(z, kappastar, 1, corner, 1, taylor);
-
-	/*gamma+starsum-(dalpha_smooth/dz_bar)_bar-(1-kappa+kappastar)*e^(-i*phi)*/
-	return gamma - d_alpha_star_d_zbar.conj() - dalpha_smooth_dz_bar.conj() - (1 - kappa - dalpha_smooth_dz.conj()) * Complex<T>(cos(phi), -sin(phi));
+	/*gamma - (d_alpha_star / d_zbar)_bar - (dalpha_smooth / dz_bar)_bar
+	- (1 - kappa - (d_alpha_smooth / d_zbar)_bar) * e^(-i * phi)*/
+	return gamma - d_alpha_star_d_zbar.conj() - dalpha_smooth_dz_bar.conj()
+		- (1 - kappa - dalpha_smooth_dz.conj()) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /*************************************************************************
-parametric critical curve equation for a circular star field
-we seek the values of z that make this equation equal to 0 for a given phi
+calculate the second derivative of the deflection angle due
+to a field of stars with respect to zbar^2
 
 \param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
 \param theta -- size of the Einstein radius of a unit mass point lens
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param phi -- value of the variable parametrizing z
 
-\return gamma + theta^2 * sum(m_i / (z - z_i)^2)
-		- (1 - kappa + kappastar) * e^(-i * phi)
+\return d2_alpha_star / d_zbar2 = 2 * theta^2 * sum(m_i / (z - z_i)^3_bar)
 *************************************************************************/
 template <typename T>
-__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi)
+__device__ Complex<T> d2_star_deflection_d_zbar2(Complex<T> z, T theta, star<T>* stars, int nstars)
 {
-	Complex<T> d_alpha_star_d_zbar = d_star_deflection_d_zbar(z, theta, stars, nstars);
-	Complex<T> dalpha_smooth_dz = d_smooth_deflection_d_z(z, kappastar, 0, corner, 0, 1);
-	Complex<T> dalpha_smooth_dz_bar = d_smooth_deflection_d_zbar(z, kappastar, 0, corner, 0, 1);
+	Complex<T> d2_alpha_star_bar_d_z2;
 
-	/*gamma+starsum-(1-kappa+kappastar)*e^(-i*phi)*/
-	return gamma - d_alpha_star_d_zbar.conj() - dalpha_smooth_dz_bar.conj() - (1 - kappa - dalpha_smooth_dz.conj()) * Complex<T>(cos(phi), -sin(phi));
+	/*sum m_i/(z-z_i)^3*/
+	for (int i = 0; i < nstars; i++)
+	{
+		d2_alpha_star_bar_d_z2 += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
+	}
+
+	/*2 * theta_e^2 * starsum*/
+	d2_alpha_star_bar_d_z2 *= 2 * (theta * theta);
+
+	return d2_alpha_star_bar_d_z2.conj();
+}
+
+/***************************************************************************
+calculate the second derivative of the deflection angle due to smooth matter
+with respect to zbar^2
+
+\param z -- complex image plane position
+\param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
+\param corner -- complex number denoting the corner of the
+				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
+
+\return d2_alpha_smooth_d_zbar2
+***************************************************************************/
+template <typename T>
+__device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
+{
+	T PI = static_cast<T>(3.1415926535898);
+	Complex<T> d2_alpha_smooth_d_zbar2;
+
+	if (rectangular)
+	{
+		if (approx)
+		{
+			Complex<T> r1 = z.conj() / corner;
+			Complex<T> r2 = z.conj() / corner.conj();
+
+			for (int i = 2; i <= taylor; i += 2)
+			{
+				d2_alpha_smooth_d_zbar2 += (r1.pow(i - 1) / corner - r2.pow(i - 1) / corner.conj());
+			}
+			d2_alpha_smooth_d_zbar2 *= 2;
+
+			if (taylor % 2 == 0)
+			{
+				d2_alpha_smooth_d_zbar2 += taylor / corner * r1.pow(taylor - 1) * 2;
+				d2_alpha_smooth_d_zbar2 -= taylor / corner.conj() * r2.pow(taylor - 1) * 2;
+			}
+
+			d2_alpha_smooth_d_zbar2 *= Complex<T>(0, -kappastar / PI);
+		}
+		else
+		{
+			Complex<T> c1 = corner.conj() - z.conj();
+			Complex<T> c2 = corner - z.conj();
+			Complex<T> c3 = -corner - z.conj();
+			Complex<T> c4 = -corner.conj() - z.conj();
+
+			d2_alpha_smooth_d_zbar2 = (-1 / c1 + 1 / c2 + 1 / c3 - 1 / c4);
+			d2_alpha_smooth_d_zbar2 *= Complex<T>(0, -kappastar / PI);
+		}
+	}
+
+	return d2_alpha_smooth_d_zbar2;
 }
 
 /********************************************************************
@@ -390,27 +419,11 @@ a rectangular star field with respect to z
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
 {
-	T PI = static_cast<T>(3.1415926535898);
-	Complex<T> starsum;
+	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
+	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 1, corner, 0, 1);
 
-	/*sum m_i/(z-z_i)^3*/
-	for (int i = 0; i < nstars; i++)
-	{
-		starsum += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
-	}
-
-	/*theta_e^2 * starsum*/
-	starsum *= (theta * theta);
-
-	Complex<T> c1 = corner.conj() - z.conj();
-	Complex<T> c2 = corner - z.conj();
-	Complex<T> c3 = -corner - z.conj();
-	Complex<T> c4 = -corner.conj() - z.conj();
-
-	Complex<T> d2alpha_smooth_dz_bar2 = Complex<T>(0, -kappastar / PI) * (-1 / c1 + 1 / c2 + 1 / c3 - 1 / c4);
-
-	/*-2*starsum - (d2alpha_dzbar2)bar*/
-	return -2 * starsum - d2alpha_smooth_dz_bar2.conj();
+	/*-starsum - (d2alpha_dzbar2)bar*/
+	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
 }
 
 /********************************************************************
@@ -435,38 +448,11 @@ template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor)
 {
 	T PI = static_cast<T>(3.1415926535898);
-	Complex<T> starsum;
-
-	/*sum m_i/(z-z_i)^3*/
-	for (int i = 0; i < nstars; i++)
-	{
-		starsum += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
-	}
-
-	/*theta_e^2 * starsum*/
-	starsum *= (theta * theta);
-
-	Complex<T> r1 = z.conj() / corner;
-	Complex<T> r2 = z.conj() / corner.conj();
-
-	Complex<T> d2alpha_smooth_dz_bar2;
-
-	for (int i = 2; i <= taylor; i += 2)
-	{
-		d2alpha_smooth_dz_bar2 += (r1.pow(i - 1) / corner - r2.pow(i - 1) / corner.conj());
-	}
-	d2alpha_smooth_dz_bar2 *= 2;
-
-	if (taylor % 2 == 0)
-	{
-		d2alpha_smooth_dz_bar2 += taylor / corner * r1.pow(taylor - 1) * 2;
-		d2alpha_smooth_dz_bar2 -= taylor / corner.conj() * r2.pow(taylor - 1) * 2;
-	}
-
-	d2alpha_smooth_dz_bar2 *= Complex<T>(0, -kappastar / PI);
+	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
+	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 1, corner, 1, taylor);
 
 	/*-2*starsum - (d2alpha_dzbar2)bar*/
-	return -2 * starsum - d2alpha_smooth_dz_bar2.conj();
+	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
 }
 
 /*********************************************************************
@@ -486,19 +472,11 @@ a circular star field with respect to z
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar)
 {
-	Complex<T> starsum;
-
-	/*sum m_i/(z-z_i)^3*/
-	for (int i = 0; i < nstars; i++)
-	{
-		starsum += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
-	}
-
-	/*theta_e^2 * starsum*/
-	starsum *= (theta * theta);
+	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
+	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 0, corner, 0, 1);
 
 	/*-2*starsum*/
-	return -2 * starsum;
+	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
 }
 
 /********************************************************************

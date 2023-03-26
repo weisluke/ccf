@@ -209,15 +209,11 @@ with respect to z
 template <typename T>
 __device__ Complex<T> d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
-	Complex<T> d_alpha_smooth_d_z;
+	Complex<T> d_alpha_smooth_d_z = -kappastar;
 
 	if (rectangular && !approx)
 	{
-		d_alpha_smooth_d_z = -kappastar * boxcar(z, corner);
-	}
-	else
-	{
-		d_alpha_smooth_d_z = -kappastar;
+		d_alpha_smooth_d_z *= boxcar(z, corner);
 	}
 
 	return d_alpha_smooth_d_z;

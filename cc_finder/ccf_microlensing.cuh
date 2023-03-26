@@ -193,7 +193,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param phi -- value of the variable parametrizing z
 
 \return gamma + theta^2 * sum(m_i / (z - z_i)^2) - (dalpha_smooth / dz_bar)_bar
-        - (1 - kappa + kappastar * boxcar(z, corner)) * e^(-i * phi)
+		- (1 - kappa + kappastar * boxcar(z, corner)) * e^(-i * phi)
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, T phi)
@@ -295,7 +295,7 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param phi -- value of the variable parametrizing z
 
 \return gamma + theta^2 * sum(m_i / (z - z_i)^2)
-        - (1 - kappa + kappastar) * e^(-i * phi)
+		- (1 - kappa + kappastar) * e^(-i * phi)
 *************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi)
@@ -330,7 +330,7 @@ a rectangular star field with respect to z
 				 rectangular field of point mass lenses
 
 \return -2 * theta^2 * sum(m_i / (z - z_i)^3)
-        - (d^2alpha_smooth / dz_bar^2)_bar
+		- (d^2alpha_smooth / dz_bar^2)_bar
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
@@ -374,7 +374,7 @@ a rectangular star field with approximations with respect to z
 \param taylor -- degree of the taylor series for alpha_smooth
 
 \return -2 * theta^2 * sum(m_i / (z - z_i)^3)
-        - (d^2alpha_smooth / dz_bar^2)_bar
+		- (d^2alpha_smooth / dz_bar^2)_bar
 ********************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor)
@@ -725,7 +725,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 
 				/*if root has not already been calculated to desired precision
 				we are calculating nbranches * 2 * nroots roots in parallel, so
-				" c * 2 * nroots " indicates what branch we are in, 
+				" c * 2 * nroots " indicates what branch we are in,
 				" b * nroots " indicates whether we are on the positive or negative
 				side, and " a " indicates the particular root position*/
 				if (!fin[c * 2 * nroots + b * nroots + a])
@@ -956,7 +956,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 	int z_stride = blockDim.z * gridDim.z;
 
 	int sgn;
-	
+
 	T PI = static_cast<T>(3.1415926535898);
 	T dphi = 2 * PI / nphi * j;
 

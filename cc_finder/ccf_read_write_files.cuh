@@ -84,6 +84,7 @@ bool write_re_array(Complex<T>* vals, int nrows, int ncols, const std::string& f
 			}
 			outfile << "\n";
 		}
+		outfile.close();
 	}
 	else
 	{
@@ -129,6 +130,7 @@ bool write_im_array(Complex<T>* vals, int nrows, int ncols, const std::string& f
 			}
 			outfile << "\n";
 		}
+		outfile.close();
 	}
 	else
 	{

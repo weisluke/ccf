@@ -186,7 +186,7 @@ __device__ Complex<T> d_star_deflection_d_zbar(Complex<T> z, T theta, star<T>* s
 		d_alpha_star_bar_d_z += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position));
 	}
 
-	/*-theta_e^2 * starsum*/
+	/*-theta_e^2 * d_alpha_star_bar_d_z*/
 	d_alpha_star_bar_d_z *= -(theta * theta);
 
 	return d_alpha_star_bar_d_z.conj();
@@ -282,7 +282,7 @@ __device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int 
 }
 
 /******************************************************************************
-parametric critical curve equation for a rectangular star field
+parametric critical curve equation for a star field
 we seek the values of z that make this equation equal to 0 for a given phi
 
 \param z -- complex image plane position
@@ -303,16 +303,17 @@ we seek the values of z that make this equation equal to 0 for a given phi
 		- (1 - kappa - d_alpha_smooth / dz) * e^(-i * phi)
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor, T phi)
+__device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor, T phi)
 {
 	Complex<T> d_alpha_star_d_zbar = d_star_deflection_d_zbar(z, theta, stars, nstars);
-	Complex<T> dalpha_smooth_dz = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
-	Complex<T> dalpha_smooth_dz_bar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> d_alpha_smooth_d_zbar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor);
 
-	/*gamma - (d_alpha_star / d_zbar)_bar - (dalpha_smooth / dz_bar)_bar
-	- (1 - kappa - (d_alpha_smooth / d_zbar)_bar) * e^(-i * phi)*/
-	return gamma - d_alpha_star_d_zbar.conj() - dalpha_smooth_dz_bar.conj()
-		- (1 - kappa - dalpha_smooth_dz.conj()) * Complex<T>(cos(phi), -sin(phi));
+	/*gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
+	- (1 - kappa - d_alpha_smooth / d_z) * e^(-i * phi)*/
+	return gamma - d_alpha_star_d_zbar.conj() - d_alpha_smooth_d_zbar.conj()
+		- (1 - kappa - d_alpha_smooth_d_z) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /*************************************************************************
@@ -337,7 +338,7 @@ __device__ Complex<T> d2_star_deflection_d_zbar2(Complex<T> z, T theta, star<T>*
 		d2_alpha_star_bar_d_z2 += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
 	}
 
-	/*2 * theta_e^2 * starsum*/
+	/*2 * theta_e^2 * d2_alpha_star_bar_d_z2*/
 	d2_alpha_star_bar_d_z2 *= 2 * (theta * theta);
 
 	return d2_alpha_star_bar_d_z2.conj();
@@ -399,9 +400,8 @@ __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, in
 	return d2_alpha_smooth_d_zbar2;
 }
 
-/********************************************************************
-derivative of the parametric critical curve equation for
-a rectangular star field with respect to z
+/***************************************************************************
+derivative of the parametric critical curve equation with respect to z
 
 \param z -- complex image plane position
 \param kappa -- total convergence
@@ -410,79 +410,29 @@ a rectangular star field with respect to z
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return -2 * theta^2 * sum(m_i / (z - z_i)^3)
 		- (d^2alpha_smooth / dz_bar^2)_bar
-********************************************************************/
+***************************************************************************/
 template <typename T>
-__device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner)
+__device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor)
 {
-	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
-	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 1, corner, 0, 1);
+	Complex<T> d2_alpha_star_d_zbar2 = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
+	Complex<T> d2_alpha_smooth_d_zbar2 = d2_smooth_deflection_d_zbar2(z, kappastar, rectangular, corner, approx, taylor);
 
-	/*-starsum - (d2alpha_dzbar2)bar*/
-	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
-}
-
-/********************************************************************
-derivative of the parametric critical curve equation for
-a rectangular star field with approximations with respect to z
-
-\param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-
-\return -2 * theta^2 * sum(m_i / (z - z_i)^3)
-		- (d^2alpha_smooth / dz_bar^2)_bar
-********************************************************************/
-template <typename T>
-__device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor)
-{
-	T PI = static_cast<T>(3.1415926535898);
-	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
-	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 1, corner, 1, taylor);
-
-	/*-2*starsum - (d2alpha_dzbar2)bar*/
-	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
-}
-
-/*********************************************************************
-derivative of the parametric critical curve equation for
-a circular star field with respect to z
-
-\param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-
-\return -2 * theta^2 * sum(m_i / (z - z_i)^3)
-*********************************************************************/
-template <typename T>
-__device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar)
-{
-	Complex<T> starsum = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
-	Complex<T> d2alpha_smooth_dz_bar2 = d2_smooth_deflection_d_zbar2(z, kappastar, 0, corner, 0, 1);
-
-	/*-2*starsum*/
-	return -starsum.conj() - d2alpha_smooth_dz_bar2.conj();
+	/* -(d2_alpha_star / d_zbar2)_bar - (d2_alpha_smooth / d_zbar2)_bar*/
+	return -d2_alpha_star_d_zbar2.conj() - d2_alpha_smooth_d_zbar2.conj();
 }
 
 /********************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
-for a rectangular star field
 
 \param k -- index of z within the roots array
 			0 <= k < nroots
@@ -493,8 +443,11 @@ for a rectangular star field
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param phi -- value of the variable parametrizing z
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
@@ -502,134 +455,21 @@ for a rectangular star field
 \return z_new -- updated value of the root z
 ********************************************************************/
 template <typename T>
-__device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, T phi, Complex<T>* roots, int nroots)
+__device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor, T phi, Complex<T>* roots, int nroots)
 {
-	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, corner, phi);
+	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi);
+	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
 
 	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < static_cast<T>(0.000000001) &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z, corner)))) < static_cast<T>(0.000000001))
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z))) < static_cast<T>(0.000000001) &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z))) < static_cast<T>(0.000000001))
 	{
 		return z;
 	}
 
-	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar, corner);
-
-	/*contribution due to distance between root and stars*/
-	Complex<T> starsum;
-	for (int i = 0; i < nstars; i++)
-	{
-		starsum += 2 / (z - stars[i].position);
-	}
-
-	/*contribution due to distance between root and other roots*/
-	Complex<T> rootsum;
-	for (int i = 0; i < nroots; i++)
-	{
-		if (i != k)
-		{
-			rootsum += 1 / (z - roots[i]);
-		}
-	}
-
-	Complex<T> result = f1 / f0 + starsum - rootsum;
-	return z - 1 / result;
-}
-
-/********************************************************************
-find an updated approximation for a particular critical curve
-root given the current approximation z and all other roots
-for a rectangular star field with approximations
-
-\param k -- index of z within the roots array
-			0 <= k < nroots
-\param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-\param phi -- value of the variable parametrizing z
-\param roots -- pointer to array of roots
-\param nroots -- number of roots in array
-
-\return z_new -- updated value of the root z
-********************************************************************/
-template <typename T>
-__device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, T phi, Complex<T>* roots, int nroots)
-{
-	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, corner, taylor, phi);
-
-	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
-	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001) &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001))
-	{
-		return z;
-	}
-
-	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar, corner, taylor);
-
-	/*contribution due to distance between root and stars*/
-	Complex<T> starsum;
-	for (int i = 0; i < nstars; i++)
-	{
-		starsum += 2 / (z - stars[i].position);
-	}
-
-	/*contribution due to distance between root and other roots*/
-	Complex<T> rootsum;
-	for (int i = 0; i < nroots; i++)
-	{
-		if (i != k)
-		{
-			rootsum += 1 / (z - roots[i]);
-		}
-	}
-
-	Complex<T> result = f1 / f0 + starsum - rootsum;
-	return z - 1 / result;
-}
-
-/********************************************************************
-find an updated approximation for a particular critical curve
-root given the current approximation z and all other roots
-for a circular star field
-
-\param k -- index of z within the roots array
-			0 <= k < nroots
-\param z -- complex image plane position
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param phi -- value of the variable parametrizing z
-\param roots -- pointer to array of roots
-\param nroots -- number of roots in array
-
-\return z_new -- updated value of the root z
-********************************************************************/
-template <typename T>
-__device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, T phi, Complex<T>* roots, int nroots)
-{
-	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, phi);
-
-	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
-	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001) &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar))) < static_cast<T>(0.000000001))
-	{
-		return z;
-	}
-
-	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar);
+	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 
 	/*contribution due to distance between root and stars*/
 	Complex<T> starsum;

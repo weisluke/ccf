@@ -496,21 +496,16 @@ int main(int argc, char* argv[])
 	********************/
 
 
+	/*variables for kernel threads and blocks*/
+	dim3 threads;
+	dim3 blocks;
+
 	/*number of threads per block, and number of blocks per grid
 	uses 512 for number of threads in x dimension, as 1024 is the
 	maximum allowable number of threads per block but is too large
 	for some memory allocation, and 512 is next power of 2 smaller*/
-
-	int num_threads_z = 1;
-	int num_threads_y = 1;
-	int num_threads_x = 512;
-
-	int num_blocks_z = 1;
-	int num_blocks_y = 1;
-	int num_blocks_x = static_cast<int>((num_stars - 1) / num_threads_x) + 1;
-
-	dim3 blocks(num_blocks_x, num_blocks_y, num_blocks_z);
-	dim3 threads(num_threads_x, num_threads_y, num_threads_z);
+	set_threads(threads, 512);
+	set_blocks(threads, blocks, num_stars);
 
 
 	/**************************
@@ -565,20 +560,9 @@ int main(int argc, char* argv[])
 	************************/
 
 
-	/*redefine thread and block size to maximize parallelization
-	number of threads per block, and number of blocks per grid
-	uses empirical optimum values for maximum number of threads and blocks*/
-
-	num_threads_x = 32;
-
-	num_blocks_z = num_branches;
-	num_blocks_y = 2;
-	num_blocks_x = static_cast<int>((num_roots - 1) / num_threads_x) + 1;
-
-	blocks.x = num_blocks_x;
-	blocks.y = num_blocks_y;
-	blocks.z = num_blocks_z;
-	threads.x = num_threads_x;
+	/*redefine thread and block size to maximize parallelization*/
+	set_threads(threads, 32);
+	set_blocks(threads, blocks, num_roots, 2, num_branches);
 
 
 	/*set boolean (int) of errors having nan values to false (0)*/
@@ -642,21 +626,7 @@ int main(int argc, char* argv[])
 		print_progress(i, num_iters - 1);
 
 		/*start kernel and perform error checking*/
-		if (rectangular)
-		{
-			if (approx)
-			{
-				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
-			}
-			else
-			{
-				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, 0, num_phi, num_branches, fin);
-			}
-		}
-		else
-		{
-			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, 0, num_phi, num_branches, fin);
-		}
+		find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 
@@ -668,21 +638,7 @@ int main(int argc, char* argv[])
 
 
 	/*calculate errors in 1/mu for initial roots*/
-	if (rectangular)
-	{
-		if (approx)
-		{
-			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, 0, num_phi, num_branches, errs);
-		}
-		else
-		{
-			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, 0, num_phi, num_branches, errs);
-		}
-	}
-	else
-	{
-		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 0, num_phi, num_branches, errs);
-	}
+	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
 	has_nan_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
@@ -733,21 +689,7 @@ int main(int argc, char* argv[])
 		/*solve roots for current values of j*/
 		for (int i = 0; i < num_iters; i++)
 		{
-			if (rectangular)
-			{
-				if (approx)
-				{
-					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
-				}
-				else
-				{
-					find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, ccs_init, num_roots, j, num_phi, num_branches, fin);
-				}
-			}
-			else
-			{
-				find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, ccs_init, num_roots, j, num_phi, num_branches, fin);
-			}
+			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
 		/*only perform synchronization call after roots have all been found
@@ -774,21 +716,7 @@ int main(int argc, char* argv[])
 
 	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		if (rectangular)
-		{
-			if (approx)
-			{
-				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, j, num_phi, num_branches, errs);
-			}
-			else
-			{
-				find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, j, num_phi, num_branches, errs);
-			}
-		}
-		else
-		{
-			find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, j, num_phi, num_branches, errs);
-		}
+		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, j, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
@@ -818,20 +746,8 @@ int main(int argc, char* argv[])
 
 
 	/*redefine thread and block size to maximize parallelization*/
-	num_threads_z = 1;
-	num_threads_y = 1;
-	num_threads_x = 512;
-
-	num_blocks_z = 1;
-	num_blocks_y = 1;
-	num_blocks_x = static_cast<int>((num_roots * (num_phi + num_branches) - 1) / num_threads_x) + 1;
-
-	blocks.x = num_blocks_x;
-	blocks.y = num_blocks_y;
-	blocks.z = num_blocks_z;
-	threads.x = num_threads_x;
-	threads.y = num_threads_y;
-	threads.z = num_threads_z;
+	set_threads(threads, 512);
+	set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
 	std::cout << "Transposing critical curve array...\n";
 	starttime = std::chrono::high_resolution_clock::now();
@@ -842,21 +758,7 @@ int main(int argc, char* argv[])
 
 	std::cout << "Finding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	if (rectangular)
-	{
-		if (approx)
-		{
-			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, taylor, caustics);
-		}
-		else
-		{
-			find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, c, caustics);
-		}
-	}
-	else
-	{
-		find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, caustics);
-	}
+	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;

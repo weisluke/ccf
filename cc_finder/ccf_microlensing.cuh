@@ -633,8 +633,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 }
 
 /********************************************************************
-find maximum error in critical curve roots
-for a rectangular star field
+find maximum error in critical curve roots for a star field
 
 \param z -- pointer to array of roots
 \param nroots -- number of roots in array
@@ -644,8 +643,11 @@ for a rectangular star field
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi in [0, 2*pi
 \param nbranches -- total number of branches for phi in [0, 2*pi]
@@ -653,7 +655,8 @@ for a rectangular star field
 			   array is of size nbranches * 2 * nroots
 ********************************************************************/
 template <typename T>
-__global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int j, int nphi, int nbranches, T* errs)
+__global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor, int j, int nphi, int nbranches, T* errs)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -683,135 +686,10 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 
 				/*the value of 1/mu depends on the value of f0
 				this calculation ensures that the maximum possible value of 1/mu is given*/
-				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, corner, phi0 + sgn * dphi);
+				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
 
 				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
 				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
-
-				/*return maximum possible error in 1/mu at root position*/
-				errs[center + sgn * j * nroots + a] = fmax(e1, e2);
-			}
-		}
-	}
-}
-
-/********************************************************************
-find maximum error in critical curve roots
-for a rectangular star field with approximations
-
-\param z -- pointer to array of roots
-\param nroots -- number of roots in array
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-\param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi in [0, 2*pi
-\param nbranches -- total number of branches for phi in [0, 2*pi]
-\param errs -- pointer to array of errors
-			   array is of size nbranches * 2 * nroots
-********************************************************************/
-template <typename T>
-__global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, int j, int nphi, int nbranches, T* errs)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
-	int y_stride = blockDim.y * gridDim.y;
-
-	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
-	int z_stride = blockDim.z * gridDim.z;
-
-	int sgn;
-
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
-
-	for (int c = z_index; c < nbranches; c += z_stride)
-	{
-		for (int b = y_index; b < 2; b += y_stride)
-		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
-
-			for (int a = x_index; a < nroots; a += x_stride)
-			{
-				sgn = (b == 0 ? -1 : 1);
-
-				int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-
-				/*the value of 1/mu depends on the value of f0
-				this calculation ensures that the maximum possible value of 1/mu is given*/
-				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, corner, taylor, phi0 + sgn * dphi);
-
-				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar)));
-				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar)));
-
-				/*return maximum possible error in 1/mu at root position*/
-				errs[center + sgn * j * nroots + a] = fmax(e1, e2);
-			}
-		}
-	}
-}
-
-/********************************************************************
-find maximum error in critical curve roots
-for a circular star field
-
-\param z -- pointer to array of roots
-\param nroots -- number of roots in array
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi in [0, 2*pi
-\param nbranches -- total number of branches for phi in [0, 2*pi]
-\param errs -- pointer to array of errors
-			   array is of size nbranches * 2 * nroots
-********************************************************************/
-template <typename T>
-__global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, int j, int nphi, int nbranches, T* errs)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
-	int y_stride = blockDim.y * gridDim.y;
-
-	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
-	int z_stride = blockDim.z * gridDim.z;
-
-	int sgn;
-
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
-
-	for (int c = z_index; c < nbranches; c += z_stride)
-	{
-		for (int b = y_index; b < 2; b += y_stride)
-		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
-
-			for (int a = x_index; a < nroots; a += x_stride)
-			{
-				sgn = (b == 0 ? -1 : 1);
-
-				int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-
-				/*the value of 1/mu depends on the value of f0
-				this calculation ensures that the maximum possible value of 1/mu is given*/
-				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, phi0 + sgn * dphi);
-
-				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar)));
-				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar)));
 
 				/*return maximum possible error in 1/mu at root position*/
 				errs[center + sgn * j * nroots + a] = fmax(e1, e2);
@@ -863,7 +741,7 @@ __global__ void max_err_kernel(T* errs, int nerrs)
 }
 
 /********************************************************************
-find caustics from critical curves for a rectangular star field
+find caustics from critical curves for a star field
 
 \param z -- pointer to array of roots
 \param nroots -- number of roots in array
@@ -873,12 +751,16 @@ find caustics from critical curves for a rectangular star field
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param w -- pointer to array of caustic positions
 ********************************************************************/
 template <typename T>
-__global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, Complex<T>* w)
+__global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* w)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -886,63 +768,7 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 	for (int a = x_index; a < nroots; a += x_stride)
 	{
 		/*map image plane positions to source plane positions*/
-		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar, corner);
-	}
-}
-
-/********************************************************************
-find caustics from critical curves for a rectangular star field
-with approximations
-
-\param z -- pointer to array of roots
-\param nroots -- number of roots in array
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-\param w -- pointer to array of caustic positions
-********************************************************************/
-template <typename T>
-__global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, Complex<T>* w)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	for (int a = x_index; a < nroots; a += x_stride)
-	{
-		/*map image plane positions to source plane positions*/
-		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar, corner, taylor);
-	}
-}
-
-/********************************************************************
-find caustics from critical curves for a circular star field
-
-\param z -- pointer to array of roots
-\param nroots -- number of roots in array
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param w -- pointer to array of caustic positions
-********************************************************************/
-template <typename T>
-__global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T>* w)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	for (int a = x_index; a < nroots; a += x_stride)
-	{
-		/*map image plane positions to source plane positions*/
-		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar);
+		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 	}
 }
 

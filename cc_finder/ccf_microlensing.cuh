@@ -213,7 +213,7 @@ __device__ Complex<T> d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rec
 
 	if (rectangular && !approx)
 	{
-		d_alpha_smooth_d_z = -kappastar * boxcar(z, c);
+		d_alpha_smooth_d_z = -kappastar * boxcar(z, corner);
 	}
 	else
 	{
@@ -463,8 +463,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 
 	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired*/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z))) < static_cast<T>(0.000000001) &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z))) < static_cast<T>(0.000000001))
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001) &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001))
 	{
 		return z;
 	}

@@ -456,8 +456,8 @@ int main(int argc, char* argv[])
 	Complex<dtype>* ccs = nullptr;
 	bool* fin = nullptr;
 	dtype* errs = nullptr;
-	Complex<dtype>* caustics = nullptr;
 	int* has_nan = nullptr;
+	Complex<dtype>* caustics = nullptr;
 
 	/*allocate memory for stars*/
 	cudaMallocManaged(&states, num_stars * sizeof(curandState));
@@ -481,13 +481,13 @@ int main(int argc, char* argv[])
 	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(dtype));
 	if (cuda_error("cudaMallocManaged(*errs)", false, __FILE__, __LINE__)) return -1;
 
-	/*array to hold caustic positions*/
-	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
-	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
-
 	/*variable to hold has_nan*/
 	cudaMallocManaged(&has_nan, sizeof(int));
 	if (cuda_error("cudaMallocManaged(*has_nan)", false, __FILE__, __LINE__)) return -1;
+
+	/*array to hold caustic positions*/
+	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
+	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
 
 	std::cout << "Done allocating memory.\n\n";
 

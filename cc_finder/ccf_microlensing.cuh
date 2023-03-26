@@ -430,7 +430,7 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 	return -d2_alpha_star_d_zbar2.conj() - d2_alpha_smooth_d_zbar2.conj();
 }
 
-/********************************************************************
+/***************************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 
@@ -453,7 +453,7 @@ root given the current approximation z and all other roots
 \param nroots -- number of roots in array
 
 \return z_new -- updated value of the root z
-********************************************************************/
+***************************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, T phi, Complex<T>* roots, int nroots)
@@ -545,7 +545,7 @@ __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi,
 }
 
 /********************************************************************
-find new critical curve roots for a rectangular star field
+find new critical curve roots for a star field
 
 \param kappa -- total convergence
 \param gamma -- external shear
@@ -553,8 +553,11 @@ find new critical curve roots for a rectangular star field
 \param stars -- pointer to array of point mass lenses
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
+\param rectangular -- whether the star field is rectangular or not
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
 \param j -- position in the number of steps used for phi
@@ -565,7 +568,8 @@ find new critical curve roots for a rectangular star field
 			  array is of size nbranches * 2 * nroots
 ********************************************************************/
 template <typename T>
-__global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
+__global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
+	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -611,175 +615,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					a is then added to get the final index of this particular root*/
 
 					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, corner, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
-
-					/*distance between old root and new root in units of theta_e*/
-					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
-
-					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
-					if (norm < static_cast<T>(0.000000001))
-					{
-						fin[c * 2 * nroots + b * nroots + a] = true;
-					}
-					roots[center + sgn * j * nroots + a] = result;
-				}
-			}
-		}
-	}
-}
-
-/********************************************************************
-find new critical curve roots for a rectangular star field
-with approximations
-
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
-\param taylor -- degree of the taylor series for alpha_smooth
-\param roots -- pointer to array of roots
-\param nroots -- number of roots in array
-\param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi in [0, 2*pi]
-\param nbranches -- total number of branches for phi in [0, 2*pi]
-\param fin -- pointer to array of boolean values for whether roots
-			  have been found to sufficient accuracy
-			  array is of size nbranches * 2 * nroots
-********************************************************************/
-template <typename T>
-__global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T> corner, int taylor, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
-	int y_stride = blockDim.y * gridDim.y;
-
-	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
-	int z_stride = blockDim.z * gridDim.z;
-
-	Complex<T> result;
-	T norm;
-	int sgn;
-
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
-
-	for (int c = z_index; c < nbranches; c += z_stride)
-	{
-		for (int b = y_index; b < 2; b += y_stride)
-		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
-
-			for (int a = x_index; a < nroots; a += x_stride)
-			{
-				/*we use the following variable to determine whether we are on the positive
-				or negative side of phi0, as we are simultaneously growing 2 sets of roots
-				after having stepped away from the middle by j out of nphi steps*/
-				sgn = (b == 0 ? -1 : 1);
-
-				/*if root has not already been calculated to desired precision
-				we are calculating nbranches * 2 * nroots roots in parallel, so
-				" c * 2 * nroots " indicates what branch we are in,
-				" b * nroots " indicates whether we are on the positive or negative
-				side, and " a " indicates the particular root position*/
-				if (!fin[c * 2 * nroots + b * nroots + a])
-				{
-					/*calculate new root
-					center of the roots array (ie the index of phi0) for all branches is
-					( nphi / (2 * nbranches) + c  * nphi / nbranches + c) * nroots
-					for the particular value of phi here (i.e., phi0 +/- dphi),
-					roots start at +/- j*nroots of that center
-					a is then added to get the final index of this particular root*/
-
-					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, corner, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
-
-					/*distance between old root and new root in units of theta_e*/
-					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
-
-					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
-					if (norm < static_cast<T>(0.000000001))
-					{
-						fin[c * 2 * nroots + b * nroots + a] = true;
-					}
-					roots[center + sgn * j * nroots + a] = result;
-				}
-			}
-		}
-	}
-}
-
-/********************************************************************
-find new critical curve roots for a circular star field
-
-\param kappa -- total convergence
-\param gamma -- external shear
-\param theta -- size of the Einstein radius of a unit mass point lens
-\param stars -- pointer to array of point mass lenses
-\param nstars -- number of point mass lenses in array
-\param kappastar -- convergence in point mass lenses
-\param roots -- pointer to array of roots
-\param nroots -- number of roots in array
-\param j -- position in the number of steps used for phi
-\param nphi -- total number of steps used for phi in [0, 2*pi]
-\param nbranches -- total number of branches for phi in [0, 2*pi]
-\param fin -- pointer to array of boolean values for whether roots
-			  have been found to sufficient accuracy
-			  array is of size nbranches * 2 * nroots
-********************************************************************/
-template <typename T>
-__global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	int y_index = blockIdx.y * blockDim.y + threadIdx.y;
-	int y_stride = blockDim.y * gridDim.y;
-
-	int z_index = blockIdx.z * blockDim.z + threadIdx.z;
-	int z_stride = blockDim.z * gridDim.z;
-
-	Complex<T> result;
-	T norm;
-	int sgn;
-
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
-
-	for (int c = z_index; c < nbranches; c += z_stride)
-	{
-		for (int b = y_index; b < 2; b += y_stride)
-		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
-
-			for (int a = x_index; a < nroots; a += x_stride)
-			{
-				/*we use the following variable to determine whether we are on the positive
-				or negative side of phi0, as we are simultaneously growing 2 sets of roots
-				after having stepped away from the middle by j out of nphi steps*/
-				sgn = (b == 0 ? -1 : 1);
-
-				/*if root has not already been calculated to desired precision
-				we are calculating nbranches * 2 * nroots roots in parallel, so
-				" c * 2 * nroots " indicates what branch we are in,
-				" b * nroots " indicates whether we are on the positive or negative
-				side, and " a " indicates the particular root position*/
-				if (!fin[c * 2 * nroots + b * nroots + a])
-				{
-					/*calculate new root
-					center of the roots array (ie the index of phi0) for all branches is
-					( nphi / (2 * nbranches) + c  * nphi / nbranches + c) * nroots
-					for the particular value of phi here (i.e., phi0 +/- dphi),
-					roots start at +/- j*nroots of that center
-					a is then added to get the final index of this particular root*/
-
-					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
+					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 					/*distance between old root and new root in units of theta_e*/
 					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;

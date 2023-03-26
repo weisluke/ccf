@@ -456,9 +456,8 @@ int main(int argc, char* argv[])
 	Complex<dtype>* ccs = nullptr;
 	bool* fin = nullptr;
 	dtype* errs = nullptr;
-	int* has_nan = nullptr;
-	dtype* max_err = nullptr;
 	Complex<dtype>* caustics = nullptr;
+	int* has_nan = nullptr;
 
 	/*allocate memory for stars*/
 	cudaMallocManaged(&states, num_stars * sizeof(curandState));
@@ -482,17 +481,13 @@ int main(int argc, char* argv[])
 	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(dtype));
 	if (cuda_error("cudaMallocManaged(*errs)", false, __FILE__, __LINE__)) return -1;
 
-	/*variable to hold has_nan*/
-	cudaMallocManaged(&has_nan, sizeof(int));
-	if (cuda_error("cudaMallocManaged(*has_nan)", false, __FILE__, __LINE__)) return -1;
-
-	/*variable to hold max_err*/
-	cudaMallocManaged(&max_err, sizeof(dtype));
-	if (cuda_error("cudaMallocManaged(*max_err)", false, __FILE__, __LINE__)) return -1;
-
 	/*array to hold caustic positions*/
 	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
+
+	/*variable to hold has_nan*/
+	cudaMallocManaged(&has_nan, sizeof(int));
+	if (cuda_error("cudaMallocManaged(*has_nan)", false, __FILE__, __LINE__)) return -1;
 
 	std::cout << "Done allocating memory.\n\n";
 
@@ -572,9 +567,6 @@ int main(int argc, char* argv[])
 
 	/*set boolean (int) of errors having nan values to false (0)*/
 	*has_nan = 0;
-
-	/*set max_err to 0*/
-	*max_err = 0;
 
 	/*initialize roots for centers of all branches to lie at starpos +/- 1*/
 	for (int j = 0; j < num_branches; j++)
@@ -659,9 +651,20 @@ int main(int argc, char* argv[])
 	}
 
 	/*find max error and print*/
-	max_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, max_err);
-	if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
-	std::cout << "Maximum error in 1/mu: " << *max_err << "\n\n";
+	int num_errs = (num_phi + num_branches) * num_roots;
+	while (num_errs > 1)
+	{
+		if (num_errs % 2 != 0)
+		{
+			errs[num_errs - 2] = std::fmax(errs[num_errs - 2], errs[num_errs - 1]);
+			num_errs -= 1;
+		}
+		num_errs /= 2;
+		max_err_kernel<dtype> <<<blocks, threads>>> (errs, num_errs);
+		if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
+	}
+	dtype max_error = errs[0];
+	std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 
 	/*reduce number of iterations needed, as roots should stay close to previous positions*/
@@ -726,9 +729,20 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	max_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, max_err);
-	if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
-	std::cout << "Maximum error in 1/mu: " << *max_err << "\n\n";
+	num_errs = (num_phi + num_branches) * num_roots;
+	while (num_errs > 1)
+	{
+		if (num_errs % 2 != 0)
+		{
+			errs[num_errs - 2] = std::fmax(errs[num_errs - 2], errs[num_errs - 1]);
+			num_errs -= 1;
+		}
+		num_errs /= 2;
+		max_err_kernel<dtype> <<<blocks, threads>>> (errs, num_errs);
+		if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
+	}
+	max_error = errs[0];
+	std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 
 	/*redefine thread and block size to maximize parallelization*/

@@ -722,21 +722,21 @@ __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 }
 
 /******************************************************
-calculate the maximum error in the error array
+set values in error array equal to max of element in
+first half and corresponding partner in second half
 
 \param errs -- pointer to array of errors
-\param nerrs -- number of errors in array
-\param maxerr -- pointer to maximum error
+\param nerrs -- half the number of errors in array
 ******************************************************/
 template <typename T>
-__global__ void max_err_kernel(T* errs, int nerrs, T* maxerr)
+__global__ void max_err_kernel(T* errs, int nerrs)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
 
 	for (int a = x_index; a < nerrs; a += x_stride)
 	{
-		atomicMax(maxerr, errs[a]);
+		errs[a] = fmax(errs[a], errs[a + nerrs]);
 	}
 }
 

@@ -691,7 +691,7 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
-	begin finding initial roots
+	begin finding initial roots and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding initial roots...\n";
 	starttime = std::chrono::high_resolution_clock::now();
@@ -764,7 +764,7 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
-	begin finding critical curves
+	begin finding critical curves and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding critical curve positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();

@@ -8,7 +8,7 @@
 #include <string>
 
 
-/**************************************************************
+/******************************************************************************
 write array of complex values to disk
 
 \param vals -- pointer to array of values
@@ -16,8 +16,8 @@ write array of complex values to disk
 \param ncols -- number of columns in array
 \param fname -- location of the .bin file to write to
 
-\return bool -- true if file successfully written, false if not
-**************************************************************/
+\return bool -- true if file is successfully written, false if not
+******************************************************************************/
 template <typename T>
 bool write_complex_array(Complex<T>* vals, int nrows, int ncols, const std::string& fname)
 {
@@ -49,7 +49,7 @@ bool write_complex_array(Complex<T>* vals, int nrows, int ncols, const std::stri
 	return true;
 }
 
-/**************************************************************
+/******************************************************************************
 write array of real part of complex values to disk
 
 \param vals -- pointer to array of values
@@ -57,8 +57,8 @@ write array of real part of complex values to disk
 \param ncols -- number of columns in array
 \param fname -- location of the .txt file to write to
 
-\return bool -- true if file successfully written, false if not
-**************************************************************/
+\return bool -- true if file is successfully written, false if not
+******************************************************************************/
 template <typename T>
 bool write_re_array(Complex<T>* vals, int nrows, int ncols, const std::string& fname)
 {
@@ -95,7 +95,7 @@ bool write_re_array(Complex<T>* vals, int nrows, int ncols, const std::string& f
 	return true;
 }
 
-/**************************************************************
+/******************************************************************************
 write array of imaginary part of complex values to disk
 
 \param vals -- pointer to array of values
@@ -103,8 +103,8 @@ write array of imaginary part of complex values to disk
 \param ncols -- number of columns in array
 \param fname -- location of the .txt file to write to
 
-\return bool -- true if file successfully written, false if not
-**************************************************************/
+\return bool -- true if file is successfully written, false if not
+******************************************************************************/
 template <typename T>
 bool write_im_array(Complex<T>* vals, int nrows, int ncols, const std::string& fname)
 {

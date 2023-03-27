@@ -4,13 +4,13 @@
 #include "star.cuh"
 
 
-/******************************
+/******************************************************************************
 Heaviside Step Function
 
 \param x -- number to evaluate
 
 \return 1 if x > 0, 0 if x <= 0
-******************************/
+******************************************************************************/
 template <typename T>
 __device__ T heaviside(T x)
 {
@@ -24,16 +24,15 @@ __device__ T heaviside(T x)
 	}
 }
 
-/************************************************
+/******************************************************************************
 2-Dimensional Boxcar Function
 
 \param z -- complex number to evalulate
 \param corner -- corner of the rectangular region
 
-\return 1 if z lies within the rectangle
-		defined by corner, 0 if it is on the
+\return 1 if z lies within the rectangle defined by corner, 0 if it is on the
 		border or outside
-************************************************/
+******************************************************************************/
 template <typename T>
 __device__ T boxcar(Complex<T> z, Complex<T> corner)
 {
@@ -47,7 +46,7 @@ __device__ T boxcar(Complex<T> z, Complex<T> corner)
 	}
 }
 
-/********************************************************************
+/******************************************************************************
 calculate the deflection angle due to a field of stars
 
 \param z -- complex image plane position
@@ -56,19 +55,23 @@ calculate the deflection angle due to a field of stars
 \param nstars -- number of point mass lenses in array
 
 \return alpha_star = theta^2 * sum(m_i / (z - z_i)_bar)
-********************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> star_deflection(Complex<T> z, T theta, star<T>* stars, int nstars)
 {
 	Complex<T> alpha_star_bar;
 
-	/*sum m_i/(z-z_i)*/
+	/******************************************************************************
+	sum m_i / (z - z_i)
+	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		alpha_star_bar += stars[i].mass / (z - stars[i].position);
 	}
 
-	/*theta_e^2 * alpha_star_bar*/
+	/******************************************************************************
+	theta_e^2 * ( sum m_i / (z - z_i) )
+	******************************************************************************/
 	alpha_star_bar *= (theta * theta);
 
 	return alpha_star_bar.conj();
@@ -135,7 +138,7 @@ __device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangul
 	return alpha_smooth;
 }
 
-/***************************************************************************
+/******************************************************************************
 lens equation from image plane to source plane
 
 \param z -- complex image plane position
@@ -146,13 +149,13 @@ lens equation from image plane to source plane
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return w = (1 - kappa) * z + gamma * z_bar - alpha_star - alpha_smooth
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar,
 	int rectangular, Complex<T> corner, int approx, int taylor)
@@ -160,11 +163,13 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 	Complex<T> alpha_star = star_deflection(z, theta, stars, nstars);
 	Complex<T> alpha_smooth = smooth_deflection(z, kappastar, rectangular, corner, approx, taylor);
 
-	/* (1 - kappa) * z + gamma * z_bar - alpha_star - alpha_smooth */
+	/******************************************************************************
+	(1 - kappa) * z + gamma * z_bar - alpha_star - alpha_smooth
+	******************************************************************************/
 	return (1 - kappa) * z + gamma * z.conj() - alpha_star - alpha_smooth;
 }
 
-/***********************************************************************
+/******************************************************************************
 calculate the derivative of the deflection angle due to a field of stars
 with respect to zbar
 
@@ -174,38 +179,42 @@ with respect to zbar
 \param nstars -- number of point mass lenses in array
 
 \return d_alpha_star / d_zbar = -theta^2 * sum(m_i / (z - z_i)^2_bar)
-***********************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d_star_deflection_d_zbar(Complex<T> z, T theta, star<T>* stars, int nstars)
 {
 	Complex<T> d_alpha_star_bar_d_z;
 
-	/*sum m_i/(z-z_i)^2*/
+	/******************************************************************************
+	sum m_i / (z - z_i)^2
+	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		d_alpha_star_bar_d_z += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position));
 	}
 
-	/*-theta_e^2 * d_alpha_star_bar_d_z*/
+	/******************************************************************************
+	-theta_e^2 * ( sum m_i / (z - z_i)^2 )
+	******************************************************************************/
 	d_alpha_star_bar_d_z *= -(theta * theta);
 
 	return d_alpha_star_bar_d_z.conj();
 }
 
-/***************************************************************************
-calculate the derivative of the deflection angle due to smooth matter
-with respect to z
+/******************************************************************************
+calculate the derivative of the deflection angle due to smooth matter with
+respect to z
 
 \param z -- complex image plane position
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return d_alpha_smooth_d_z
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
@@ -219,9 +228,9 @@ __device__ Complex<T> d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rec
 	return d_alpha_smooth_d_z;
 }
 
-/***************************************************************************
-calculate the derivative of the deflection angle due to smooth matter
-with respect to zbar
+/******************************************************************************
+calculate the derivative of the deflection angle due to smooth matter with
+respect to zbar
 
 \param z -- complex image plane position
 \param kappastar -- convergence in point mass lenses
@@ -232,7 +241,7 @@ with respect to zbar
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return d_alpha_smooth_d_zbar
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
@@ -289,8 +298,8 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param phi -- value of the variable parametrizing z
@@ -306,15 +315,17 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
 	Complex<T> d_alpha_smooth_d_zbar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor);
 
-	/*gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
-	- (1 - kappa - d_alpha_smooth / d_z) * e^(-i * phi)*/
+	/******************************************************************************
+	gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
+	- (1 - kappa - d_alpha_smooth / d_z) * e^(-i * phi)
+	******************************************************************************/
 	return gamma - d_alpha_star_d_zbar.conj() - d_alpha_smooth_d_zbar.conj()
 		- (1 - kappa - d_alpha_smooth_d_z) * Complex<T>(cos(phi), -sin(phi));
 }
 
-/*************************************************************************
-calculate the second derivative of the deflection angle due
-to a field of stars with respect to zbar^2
+/******************************************************************************
+calculate the second derivative of the deflection angle due to a field of stars
+with respect to zbar^2
 
 \param z -- complex image plane position
 \param theta -- size of the Einstein radius of a unit mass point lens
@@ -322,38 +333,42 @@ to a field of stars with respect to zbar^2
 \param nstars -- number of point mass lenses in array
 
 \return d2_alpha_star / d_zbar2 = 2 * theta^2 * sum(m_i / (z - z_i)^3_bar)
-*************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d2_star_deflection_d_zbar2(Complex<T> z, T theta, star<T>* stars, int nstars)
 {
 	Complex<T> d2_alpha_star_bar_d_z2;
 
-	/*sum m_i/(z-z_i)^3*/
+	/******************************************************************************
+	sum m_i / (z - z_i)^3
+	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		d2_alpha_star_bar_d_z2 += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
 	}
 
-	/*2 * theta_e^2 * d2_alpha_star_bar_d_z2*/
-	d2_alpha_star_bar_d_z2 *= 2 * (theta * theta);
+	/******************************************************************************
+	2 * theta_e^2 * ( sum m_i / (z - z_i)^3 )
+	******************************************************************************/
+	d2_alpha_star_bar_d_z2 *= (2 * theta * theta);
 
 	return d2_alpha_star_bar_d_z2.conj();
 }
 
-/***************************************************************************
+/******************************************************************************
 calculate the second derivative of the deflection angle due to smooth matter
 with respect to zbar^2
 
 \param z -- complex image plane position
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return d2_alpha_smooth_d_zbar2
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
@@ -396,7 +411,7 @@ __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, in
 	return d2_alpha_smooth_d_zbar2;
 }
 
-/***************************************************************************
+/******************************************************************************
 derivative of the parametric critical curve equation with respect to z
 
 \param z -- complex image plane position
@@ -407,14 +422,14 @@ derivative of the parametric critical curve equation with respect to z
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return -2 * theta^2 * sum(m_i / (z - z_i)^3)
 		- (d^2alpha_smooth / dz_bar^2)_bar
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor)
@@ -422,11 +437,13 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 	Complex<T> d2_alpha_star_d_zbar2 = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
 	Complex<T> d2_alpha_smooth_d_zbar2 = d2_smooth_deflection_d_zbar2(z, kappastar, rectangular, corner, approx, taylor);
 
-	/* -(d2_alpha_star / d_zbar2)_bar - (d2_alpha_smooth / d_zbar2)_bar*/
+	/******************************************************************************
+	-(d2_alpha_star / d_zbar2)_bar - (d2_alpha_smooth / d_zbar2)_bar
+	******************************************************************************/
 	return -d2_alpha_star_d_zbar2.conj() - d2_alpha_smooth_d_zbar2.conj();
 }
 
-/***************************************************************************
+/******************************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 
@@ -440,8 +457,8 @@ root given the current approximation z and all other roots
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param phi -- value of the variable parametrizing z
@@ -449,7 +466,7 @@ root given the current approximation z and all other roots
 \param nroots -- number of roots in array
 
 \return z_new -- updated value of the root z
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, T phi, Complex<T>* roots, int nroots)
@@ -457,8 +474,11 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi);
 	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
 
-	/*if 1/mu < 10^-9, return same position. the value of 1/mu depends on the value of f0
-	this check ensures that the maximum possible value of 1/mu is less than desired*/
+	/******************************************************************************
+	if 1/mu < 10^-9, return same position
+	the value of 1/mu depends on the value of f0
+	this check ensures that the maximum possible value of 1/mu is less than desired
+	******************************************************************************/
 	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001) &&
 		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001))
 	{
@@ -467,14 +487,18 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 
 	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 
-	/*contribution due to distance between root and stars*/
+	/******************************************************************************
+	contribution due to distance between root and stars
+	******************************************************************************/
 	Complex<T> starsum;
 	for (int i = 0; i < nstars; i++)
 	{
 		starsum += 2 / (z - stars[i].position);
 	}
 
-	/*contribution due to distance between root and other roots*/
+	/******************************************************************************
+	contribution due to distance between root and other roots
+	******************************************************************************/
 	Complex<T> rootsum;
 	for (int i = 0; i < nroots; i++)
 	{
@@ -488,22 +512,22 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	return z - 1 / result;
 }
 
-/*****************************************************************
-take the list of all roots z, the given value of j out of nphi
-steps, and the number of branches, and set the initial roots for
-step j equal to the final roots of step j-1
-reset values for whether roots have all been found to
-sufficient accuracy to false
+/******************************************************************************
+take the list of all roots z, the given value of j out of nphi steps, and the
+number of branches, and set the initial roots for step j equal to the final
+roots of step j-1
+reset values for whether roots have all been found to sufficient accuracy to
+false
 
 \param z -- pointer to array of root positions
 \param nroots -- number of roots
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi in [0, 2*pi]
 \param nbranches -- total number of branches for phi in [0, 2*pi]
-\param fin -- pointer to array of boolean values for whether roots
-			  have been found to sufficient accuracy
+\param fin -- pointer to array of boolean values for whether roots have been
+			  found to sufficient accuracy
 			  array is of size nbranches * 2 * nroots
-*****************************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
@@ -540,7 +564,7 @@ __global__ void prepare_roots_kernel(Complex<T>* z, int nroots, int j, int nphi,
 	}
 }
 
-/********************************************************************
+/******************************************************************************
 find new critical curve roots for a star field
 
 \param kappa -- total convergence
@@ -550,8 +574,8 @@ find new critical curve roots for a star field
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param roots -- pointer to array of roots
@@ -559,10 +583,10 @@ find new critical curve roots for a star field
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi in [0, 2*pi]
 \param nbranches -- total number of branches for phi in [0, 2*pi]
-\param fin -- pointer to array of boolean values for whether roots
-			  have been found to sufficient accuracy
+\param fin -- pointer to array of boolean values for whether roots have been
+			  found to sufficient accuracy
 			  array is of size nbranches * 2 * nroots
-********************************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
@@ -591,32 +615,43 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 
 			for (int a = x_index; a < nroots; a += x_stride)
 			{
-				/*we use the following variable to determine whether we are on the positive
-				or negative side of phi0, as we are simultaneously growing 2 sets of roots
-				after having stepped away from the middle by j out of nphi steps*/
+				/******************************************************************************
+				we use the following variable to determine whether we are on the positive or
+				negative side of phi0, as we are simultaneously growing 2 sets of roots after
+				having stepped away from the middle by j out of nphi steps
+				******************************************************************************/
 				sgn = (b == 0 ? -1 : 1);
 
-				/*if root has not already been calculated to desired precision
+				/******************************************************************************
+				if root has not already been calculated to desired precision
 				we are calculating nbranches * 2 * nroots roots in parallel, so
 				" c * 2 * nroots " indicates what branch we are in,
-				" b * nroots " indicates whether we are on the positive or negative
-				side, and " a " indicates the particular root position*/
+				" b * nroots " indicates whether we are on the positive or negative side, and
+				" a " indicates the particular root position
+				******************************************************************************/
 				if (!fin[c * 2 * nroots + b * nroots + a])
 				{
-					/*calculate new root
+					/******************************************************************************
+					calculate new root
 					center of the roots array (ie the index of phi0) for all branches is
 					( nphi / (2 * nbranches) + c  * nphi / nbranches + c) * nroots
-					for the particular value of phi here (i.e., phi0 +/- dphi),
-					roots start at +/- j*nroots of that center
-					a is then added to get the final index of this particular root*/
+					for the particular value of phi here (i.e., phi0 +/- dphi), roots start
+					at +/- j*nroots of that center
+					a is then added to get the final index of this particular root
+					******************************************************************************/
 
 					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
 					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
-					/*distance between old root and new root in units of theta_e*/
+					/******************************************************************************
+					distance between old root and new root in units of theta_e
+					******************************************************************************/
 					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
 
-					/*compare position to previous value, if less than desired precision of 10^-9, set fin[root] to true*/
+					/******************************************************************************
+					compare position to previous value, if less than desired precision of 10^-9,
+					set fin[root] to true
+					******************************************************************************/
 					if (norm < static_cast<T>(0.000000001))
 					{
 						fin[c * 2 * nroots + b * nroots + a] = true;
@@ -628,7 +663,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	}
 }
 
-/********************************************************************
+/******************************************************************************
 find maximum error in critical curve roots for a star field
 
 \param z -- pointer to array of roots
@@ -640,8 +675,8 @@ find maximum error in critical curve roots for a star field
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param j -- position in the number of steps used for phi
@@ -649,7 +684,7 @@ find maximum error in critical curve roots for a star field
 \param nbranches -- total number of branches for phi in [0, 2*pi]
 \param errs -- pointer to array of errors
 			   array is of size nbranches * 2 * nroots
-********************************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, int j, int nphi, int nbranches, T* errs)
@@ -680,28 +715,31 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 
 				int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
 
-				/*the value of 1/mu depends on the value of f0
-				this calculation ensures that the maximum possible value of 1/mu is given*/
+				/******************************************************************************
+				the value of 1/mu depends on the value of f0
+				this calculation ensures that the maximum possible value of 1/mu is given
+				******************************************************************************/
 				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
 
 				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
 				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
 
-				/*return maximum possible error in 1/mu at root position*/
+				/******************************************************************************
+				return maximum possible error in 1/mu at root position
+				******************************************************************************/
 				errs[center + sgn * j * nroots + a] = fmax(e1, e2);
 			}
 		}
 	}
 }
 
-/******************************************************
+/******************************************************************************
 determine whether errors have nan values
 
 \param errs -- pointer to array of errors
 \param nerrs -- number of errors in array
-\param hasnan -- pointer to int (bool) of whether array
-				 has nan values or not
-******************************************************/
+\param hasnan -- pointer to int (bool) of whether array has nan values or not
+******************************************************************************/
 template <typename T>
 __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 {
@@ -717,13 +755,13 @@ __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 	}
 }
 
-/******************************************************
-set values in error array equal to max of element in
-first half and corresponding partner in second half
+/******************************************************************************
+set values in error array equal to max of element in first half and
+corresponding partner in second half
 
 \param errs -- pointer to array of errors
 \param nerrs -- half the number of errors in array
-******************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void max_err_kernel(T* errs, int nerrs)
 {
@@ -736,7 +774,7 @@ __global__ void max_err_kernel(T* errs, int nerrs)
 	}
 }
 
-/********************************************************************
+/******************************************************************************
 find caustics from critical curves for a star field
 
 \param z -- pointer to array of roots
@@ -748,12 +786,12 @@ find caustics from critical curves for a star field
 \param nstars -- number of point mass lenses in array
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 \param w -- pointer to array of caustic positions
-********************************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* w)
@@ -763,19 +801,21 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 
 	for (int a = x_index; a < nroots; a += x_stride)
 	{
-		/*map image plane positions to source plane positions*/
+		/******************************************************************************
+		map image plane positions to source plane positions
+		******************************************************************************/
 		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 	}
 }
 
-/**************************************************************
+/******************************************************************************
 transpose array
 
 \param z1 -- pointer to array of values
 \param nrows -- number of rows in array
 \param ncols -- number of columns in array
 \param z2 -- pointer to transposed array of values
-**************************************************************/
+******************************************************************************/
 template <typename T>
 __global__ void transpose_array_kernel(Complex<T>* z1, int nrows, int ncols, Complex<T>* z2)
 {

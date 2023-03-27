@@ -1,9 +1,9 @@
-﻿/*****************************************************************
+﻿/******************************************************************************
 
 Please provide credit to Luke Weisenbach should this code be used.
 Email: weisluke@alum.mit.edu
 
-*****************************************************************/
+******************************************************************************/
 
 
 #include "complex.cuh"
@@ -24,7 +24,9 @@ Email: weisluke@alum.mit.edu
 
 using dtype = double;
 
-/*constants to be used*/
+/******************************************************************************
+constants to be used
+******************************************************************************/
 const dtype PI = static_cast<dtype>(3.1415926535898);
 constexpr int OPTS_SIZE = 2 * 15;
 const std::string OPTS[OPTS_SIZE] =
@@ -47,7 +49,9 @@ const std::string OPTS[OPTS_SIZE] =
 };
 
 
-/*default input option values*/
+/******************************************************************************
+default input option values
+******************************************************************************/
 dtype kappa_tot = static_cast<dtype>(0.3);
 dtype shear = static_cast<dtype>(0.3);
 dtype theta_e = static_cast<dtype>(1);
@@ -63,9 +67,10 @@ int random_seed = 0;
 std::string outfile_type = ".bin";
 std::string outfile_prefix = "./";
 
-/*default derived parameter values
-upper and lower mass cutoffs,
-<m>, and <m^2>*/
+/******************************************************************************
+default derived parameter values
+number of stars, upper and lower mass cutoffs, <m>, and <m^2>
+******************************************************************************/
 dtype m_lower = static_cast<dtype>(1);
 dtype m_upper = static_cast<dtype>(1);
 dtype mean_mass = static_cast<dtype>(1);
@@ -73,11 +78,11 @@ dtype mean_squared_mass = static_cast<dtype>(1);
 
 
 
-/************************************
+/******************************************************************************
 Print the program usage help message
 
 \param name -- name of the executable
-************************************/
+******************************************************************************/
 void display_usage(char* name)
 {
 	if (name)
@@ -152,20 +157,25 @@ void display_usage(char* name)
 
 int main(int argc, char* argv[])
 {
-
-	/*set precision for printing numbers to screen*/
+	/******************************************************************************
+	set precision for printing numbers to screen
+	******************************************************************************/
 	std::cout.precision(7);
 
-	/*if help option has been input, display usage message*/
+	/******************************************************************************
+	if help option has been input, display usage message
+	******************************************************************************/
 	if (cmd_option_exists(argv, argv + argc, "-h") || cmd_option_exists(argv, argv + argc, "--help"))
 	{
 		display_usage(argv[0]);
 		return -1;
 	}
 
-	/*if there are input options, but not an even number (since all options
-	take a parameter), display usage message and exit
-	subtract 1 to take into account that first argument array value is program name*/
+	/******************************************************************************
+	if there are input options, but not an even number (since all options take a
+	parameter), display usage message and exit
+	subtract 1 to take into account that first argument array value is program name
+	******************************************************************************/
 	if ((argc - 1) % 2 != 0)
 	{
 		std::cerr << "Error. Not enough values for options.\n";
@@ -173,9 +183,11 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	/*check that all options given are valid. use step of 2 since all input
-	options take parameters (assumed to be given immediately after the option)
-	start at 1, since first array element, argv[0], is program name*/
+	/******************************************************************************
+	check that all options given are valid. use step of 2 since all input options
+	take parameters (assumed to be given immediately after the option). start at 1,
+	since first array element, argv[0], is program name
+	******************************************************************************/
 	for (int i = 1; i < argc; i += 2)
 	{
 		if (!cmd_option_valid(OPTS, OPTS + OPTS_SIZE, argv[i]))
@@ -399,18 +411,41 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	/****************************************************************************
+	/******************************************************************************
 	END read in options and values, checking correctness and exiting if necessary
-	****************************************************************************/
+	******************************************************************************/
 
 
-	/*check that a CUDA capable device is present*/
+	/******************************************************************************
+	check that a CUDA capable device is present
+	******************************************************************************/
+	int n_devices = 0;
+
+	cudaGetDeviceCount(&n_devices);
+	if (cuda_error("cudaGetDeviceCount", false, __FILE__, __LINE__)) return -1;
+
+	for (int i = 0; i < n_devices; i++)
+	{
+		cudaDeviceProp prop;
+		cudaGetDeviceProperties(&prop, i);
+		if (cuda_error("cudaGetDeviceProperties", false, __FILE__, __LINE__)) return -1;
+
+		show_device_info(i, prop);
+		std::cout << "\n";
+	}
+
+	if (n_devices > 1)
+	{
+		std::cout << "More than one CUDA capable device detected. Defaulting to first device.\n\n";
+	}
 	cudaSetDevice(0);
 	if (cuda_error("cudaSetDevice", false, __FILE__, __LINE__)) return -1;
 
 
-	/*if star file is specified, set num_stars, m_lower, m_upper,
-	mean_mass, and mean_squared_mass based on star information*/
+	/******************************************************************************
+	if star file is specified, check validity of values and set num_stars, m_lower,
+	m_upper, mean_mass, and mean_squared_mass based on star information
+	******************************************************************************/
 	if (starfile != "")
 	{
 		std::cout << "Calculating some parameter values based on star input file " << starfile << "\n";
@@ -424,7 +459,9 @@ int main(int argc, char* argv[])
 		std::cout << "Done calculating some parameter values based on star input file " << starfile << "\n\n";
 	}
 
-	/*average magnification of the system*/
+	/******************************************************************************
+	average magnification of the system
+	******************************************************************************/
 	dtype mu_ave = 1 / ((1 - kappa_tot) * (1 - kappa_tot) - shear * shear);
 
 	std::cout << "Number of stars used: " << num_stars << "\n\n";
@@ -436,7 +473,9 @@ int main(int argc, char* argv[])
 			);
 	dtype rad = std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star);
 
-	/*number of roots to be found*/
+	/******************************************************************************
+	number of roots to be found
+	******************************************************************************/
 	int num_roots = 2 * num_stars;
 	if (rectangular && approx)
 	{
@@ -444,9 +483,9 @@ int main(int argc, char* argv[])
 	}
 
 
-	/**********************
+	/******************************************************************************
 	BEGIN memory allocation
-	**********************/
+	******************************************************************************/
 
 	std::cout << "Beginning memory allocation...\n";
 
@@ -459,71 +498,94 @@ int main(int argc, char* argv[])
 	int* has_nan = nullptr;
 	Complex<dtype>* caustics = nullptr;
 
-	/*allocate memory for stars*/
+	/******************************************************************************
+	allocate memory for stars
+	******************************************************************************/
 	cudaMallocManaged(&states, num_stars * sizeof(curandState));
 	if (cuda_error("cudaMallocManaged(*states)", false, __FILE__, __LINE__)) return -1;
 	cudaMallocManaged(&stars, num_stars * sizeof(star<dtype>));
 	if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return -1;
 
-	/*allocate memory for array of critical curve positions*/
+	/******************************************************************************
+	allocate memory for array of critical curve positions
+	******************************************************************************/
 	cudaMallocManaged(&ccs_init, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*ccs_init)", false, __FILE__, __LINE__)) return -1;
 
-	/*allocate memory for array of transposed critical curve positions*/
+	/******************************************************************************
+	allocate memory for array of transposed critical curve positions
+	******************************************************************************/
 	cudaMallocManaged(&ccs, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*ccs)", false, __FILE__, __LINE__)) return -1;
 
-	/*array to hold t/f values of whether or not roots have been found to desired precision*/
+	/******************************************************************************
+	array to hold t/f values of whether or not roots have been found to desired
+	precision
+	******************************************************************************/
 	cudaMallocManaged(&fin, num_branches * 2 * num_roots * sizeof(bool));
 	if (cuda_error("cudaMallocManaged(*fin)", false, __FILE__, __LINE__)) return -1;
 
-	/*array to hold root errors*/
+	/******************************************************************************
+	array to hold root errors
+	******************************************************************************/
 	cudaMallocManaged(&errs, (num_phi + num_branches) * num_roots * sizeof(dtype));
 	if (cuda_error("cudaMallocManaged(*errs)", false, __FILE__, __LINE__)) return -1;
 
-	/*variable to hold has_nan*/
+	/******************************************************************************
+	variable to hold whether array of root errors has nan errors or not
+	******************************************************************************/
 	cudaMallocManaged(&has_nan, sizeof(int));
 	if (cuda_error("cudaMallocManaged(*has_nan)", false, __FILE__, __LINE__)) return -1;
 
-	/*array to hold caustic positions*/
+	/******************************************************************************
+	array to hold caustic positions
+	******************************************************************************/
 	cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<dtype>));
 	if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return -1;
 
 	std::cout << "Done allocating memory.\n\n";
 
-	/********************
+	/******************************************************************************
 	END memory allocation
-	********************/
+	******************************************************************************/
 
 
-	/*variables for kernel threads and blocks*/
+	/******************************************************************************
+	variables for kernel threads and blocks
+	******************************************************************************/
 	dim3 threads;
 	dim3 blocks;
 
-	/*number of threads per block, and number of blocks per grid
-	uses 512 for number of threads in x dimension, as 1024 is the
-	maximum allowable number of threads per block but is too large
-	for some memory allocation, and 512 is next power of 2 smaller*/
+	/******************************************************************************
+	number of threads per block, and number of blocks per grid
+	uses 512 for number of threads in x dimension, as 1024 is the maximum allowable
+	number of threads per block but is too large for some memory allocation, and
+	512 is next power of 2 smaller
+	******************************************************************************/
 	set_threads(threads, 512);
 	set_blocks(threads, blocks, num_stars);
 
 
-	/**************************
+	/******************************************************************************
 	BEGIN populating star array
-	**************************/
+	******************************************************************************/
 
 	if (starfile == "")
 	{
 		std::cout << "Generating star field...\n";
 
-		/*if random seed was not provided, get one based on the time*/
+		/******************************************************************************
+		if random seed was not provided, get one based on the time
+		******************************************************************************/
 		if (random_seed == 0)
 		{
 			random_seed = static_cast<int>(std::chrono::system_clock::now().time_since_epoch().count());
 		}
 
-		/*generate random star field if no star file has been given
-		uses default star mass of 1.0*/
+		/******************************************************************************
+		generate random star field if no star file has been given
+		uses default star mass of 1.0
+		******************************************************************************/
 		initialize_curand_states_kernel<dtype> <<<blocks, threads>>> (states, num_stars, random_seed);
 		if (cuda_error("initialize_curand_states_kernel", true, __FILE__, __LINE__)) return -1;
 		if (rectangular)
@@ -540,12 +602,16 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		/*ensure random seed is 0 to denote that stars come from external file*/
+		/******************************************************************************
+		ensure random seed is 0 to denote that stars come from external file
+		******************************************************************************/
 		random_seed = 0;
 
 		std::cout << "Reading star field from file " << starfile << "\n";
 
-		/*reading star field from external file*/
+		/******************************************************************************
+		reading star field from external file
+		******************************************************************************/
 		if (!read_star_file<dtype>(stars, num_stars, starfile))
 		{
 			std::cerr << "Error. Unable to read star field from file " << starfile << "\n";
@@ -560,15 +626,21 @@ int main(int argc, char* argv[])
 	************************/
 
 
-	/*redefine thread and block size to maximize parallelization*/
+	/******************************************************************************
+	redefine thread and block size to maximize parallelization
+	******************************************************************************/
 	set_threads(threads, 32);
 	set_blocks(threads, blocks, num_roots, 2, num_branches);
 
 
-	/*set boolean (int) of errors having nan values to false (0)*/
+	/******************************************************************************
+	set boolean (int) of errors having nan values to false (0)
+	******************************************************************************/
 	*has_nan = 0;
 
-	/*initialize roots for centers of all branches to lie at starpos +/- 1*/
+	/******************************************************************************
+	initialize roots for centers of all branches to lie at starpos +/- 1
+	******************************************************************************/
 	for (int j = 0; j < num_branches; j++)
 	{
 		int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
@@ -582,15 +654,18 @@ int main(int argc, char* argv[])
 			int nroots_extra = static_cast<int>(taylor / 2) * 2;
 			for (int i = 0; i < nroots_extra; i++)
 			{
-				ccs_init[center + 2 * num_stars + i] = c.abs() * Complex<dtype>(std::cos(2 * PI / nroots_extra * i), std::sin(2 * PI / nroots_extra * i));
+				ccs_init[center + 2 * num_stars + i] = c.abs() * 
+					Complex<dtype>(std::cos(2 * PI / nroots_extra * i), std::sin(2 * PI / nroots_extra * i));
 			}
 		}
 	}
 
-	/*initialize values of whether roots have been found to false
-	twice the number of roots for a single value of phi for each branch,
-	times the number of branches, because we will be growing roots for two
-	values of phi simultaneously for each branch*/
+	/******************************************************************************
+	initialize values of whether roots have been found to false
+	twice the number of roots for a single value of phi for each branch, times the
+	number of branches, because we will be growing roots for two values of phi
+	simultaneously for each branch
+	******************************************************************************/
 	for (int i = 0; i < num_branches * 2 * num_roots; i++)
 	{
 		fin[i] = false;
@@ -601,44 +676,54 @@ int main(int argc, char* argv[])
 		errs[i] = static_cast<dtype>(0);
 	}
 
-	/*number of iterations to use for root finding
-	empirically, 30 seems to be roughly the amount needed*/
+	/******************************************************************************
+	number of iterations to use for root finding
+	empirically, 30 seems to be roughly the amount needed
+	******************************************************************************/
 	int num_iters = 30;
 
-	/*start and end time for timing purposes*/
+
+	/******************************************************************************
+	start and end time for timing purposes
+	******************************************************************************/
 	std::chrono::high_resolution_clock::time_point starttime;
 	std::chrono::high_resolution_clock::time_point endtime;
 
-	/*begin finding initial roots*/
-	std::cout << "Finding initial roots...\n";
 
-	/*get current time at start of loop*/
+	/******************************************************************************
+	begin finding initial roots
+	******************************************************************************/
+	std::cout << "Finding initial roots...\n";
 	starttime = std::chrono::high_resolution_clock::now();
 
-	/*each iteration of this loop calculates updated positions
-	of all roots for the center of each branch in parallel
-	ideally, the number of loop iterations is enough to ensure that
-	all roots are found to the desired accuracy*/
+	/******************************************************************************
+	each iteration of this loop calculates updated positions of all roots for the
+	center of each branch in parallel
+	ideally, the number of loop iterations is enough to ensure that all roots are
+	found to the desired accuracy
+	******************************************************************************/
 	for (int i = 0; i < num_iters; i++)
 	{
-		/*display percentage done
-		uses default of printing progress bar of length 50*/
+		/******************************************************************************
+		display percentage done
+		******************************************************************************/
 		print_progress(i, num_iters - 1);
 
-		/*start kernel and perform error checking*/
-		find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
+		find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
+			rectangular, c, approx, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
-
-	/*get current time at end of loop, and calculate duration in milliseconds*/
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_init_roots = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
 
 	std::cout << "\nDone finding roots. Elapsed time: " << t_init_roots << " seconds.\n";
 
 
-	/*calculate errors in 1/mu for initial roots*/
-	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, 0, num_phi, num_branches, errs);
+	/******************************************************************************
+	calculate errors in 1/mu for initial roots
+	******************************************************************************/
+	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
+		rectangular, c, approx, taylor, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 
 	has_nan_err_kernel<dtype> <<<blocks, threads>>> (errs, (num_phi + num_branches) * num_roots, has_nan);
@@ -650,7 +735,11 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	/*find max error and print*/
+	/******************************************************************************
+	find max error and print
+	must be performed in loops as CUDA does not currently have an atomicMax for
+	floats or doubles, only ints
+	******************************************************************************/
 	int num_errs = (num_phi + num_branches) * num_roots;
 	while (num_errs > 1)
 	{
@@ -667,37 +756,50 @@ int main(int argc, char* argv[])
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 
-	/*reduce number of iterations needed, as roots should stay close to previous positions*/
+	/******************************************************************************
+	reduce number of iterations needed, as roots should stay close to previous
+	positions
+	******************************************************************************/
 	num_iters = 20;
 
-	/*begin finding critical curves*/
-	std::cout << "Finding critical curve positions...\n";
 
+	/******************************************************************************
+	begin finding critical curves
+	******************************************************************************/
+	std::cout << "Finding critical curve positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
 
-	/*the outer loop will step through different values of phi
-	we use num_phi/(2*num_branches) steps, as we will be working our way out
-	from the middle of each branch for the array of roots simultaneously*/
+	/******************************************************************************
+	the outer loop will step through different values of phi
+	we use num_phi/(2*num_branches) steps, as we will be working our way out from
+	the middle of each branch for the array of roots simultaneously
+	******************************************************************************/
 	for (int j = 1; j <= num_phi / (2 * num_branches); j++)
 	{
-
-		/*set critical curve array elements to be equal to last roots
-		fin array is reused each time*/
+		/******************************************************************************
+		set critical curve array elements to be equal to last roots
+		fin array is reused each time
+		******************************************************************************/
 		prepare_roots_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, j, num_phi, num_branches, fin);
 		if (cuda_error("prepare_roots_kernel", false, __FILE__, __LINE__)) return -1;
 
-		/*solve roots for current values of j*/
+		/******************************************************************************
+		calculate roots for current values of j
+		******************************************************************************/
 		for (int i = 0; i < num_iters; i++)
 		{
-			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
+			find_critical_curve_roots_kernel<dtype> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
+				rectangular, c, approx, taylor, ccs_init, num_roots, j, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return -1;
 		}
-		/*only perform synchronization call after roots have all been found
-		this allows the print_progress call in the outer loop to accurately display
-		the amount of work done so far
-		one could move the synchronization call outside of the outer loop for a
-		slight speed-up, at the cost of not knowing how far along in the process
-		the computations have gone*/
+		/******************************************************************************
+		only perform synchronization call after roots have all been found
+		this allows the print_progress call in the outer loop to accurately display the
+		amount of work done so far
+		one could move the synchronization call outside of the outer loop for a slight
+		speed-up, at the cost of not knowing how far along in the process the
+		computations have gone
+		******************************************************************************/
 		if (j * 100 / (num_phi / (2 * num_branches)) > (j - 1) * 100 / (num_phi / (2 * num_branches)))
 		{
 			cudaDeviceSynchronize();
@@ -711,12 +813,15 @@ int main(int argc, char* argv[])
 	std::cout << "\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n\n";
 
 
-	/*find max error in 1/mu over whole critical curve array and print*/
+	/******************************************************************************
+	find max error in 1/mu over whole critical curve array and print
+	******************************************************************************/
 	std::cout << "Finding maximum error in 1/mu over all calculated critical curve positions...\n";
 
 	for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 	{
-		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, j, num_phi, num_branches, errs);
+		find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
+			rectangular, c, approx, taylor, j, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
 	}
 
@@ -745,7 +850,9 @@ int main(int argc, char* argv[])
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 
-	/*redefine thread and block size to maximize parallelization*/
+	/******************************************************************************
+	redefine thread and block size to maximize parallelization
+	******************************************************************************/
 	set_threads(threads, 512);
 	set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
@@ -758,7 +865,8 @@ int main(int argc, char* argv[])
 
 	std::cout << "Finding caustic positions...\n";
 	starttime = std::chrono::high_resolution_clock::now();
-	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, rectangular, c, approx, taylor, caustics);
+	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
+		rectangular, c, approx, taylor, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
 	endtime = std::chrono::high_resolution_clock::now();
 	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
@@ -766,8 +874,10 @@ int main(int argc, char* argv[])
 
 
 
-	/*stream for writing output files
-	set precision to 9 digits*/
+	/******************************************************************************
+	stream for writing output files
+	set precision to 9 digits
+	******************************************************************************/
 	std::ofstream outfile;
 	outfile.precision(9);
 	std::string fname;
@@ -826,7 +936,9 @@ int main(int argc, char* argv[])
 	std::cout << "Done writing star info to file " << fname << "\n\n";
 
 
-	/*write critical curve positions*/
+	/******************************************************************************
+	write critical curve positions
+	******************************************************************************/
 	std::cout << "Writing critical curve positions...\n";
 	if (outfile_type == ".txt")
 	{
@@ -859,7 +971,9 @@ int main(int argc, char* argv[])
 	std::cout << "\n";
 
 
-	/*write caustic positions*/
+	/******************************************************************************
+	write caustic positions
+	******************************************************************************/
 	std::cout << "Writing caustic positions...\n";
 	if (outfile_type == ".txt")
 	{

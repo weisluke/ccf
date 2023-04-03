@@ -9,6 +9,7 @@ Email: weisluke@alum.mit.edu
 #include "complex.cuh"
 #include "ccf_microlensing.cuh"
 #include "ccf_read_write_files.cuh"
+#include "mass_function.cuh"
 #include "star.cuh"
 #include "util.hpp"
 
@@ -19,6 +20,7 @@ Email: weisluke@alum.mit.edu
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <string>
 
 
@@ -28,15 +30,19 @@ using dtype = double;
 constants to be used
 ******************************************************************************/
 const dtype PI = static_cast<dtype>(3.1415926535898);
-constexpr int OPTS_SIZE = 2 * 16;
+constexpr int OPTS_SIZE = 2 * 20;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
 	"-v", "--verbose",
 	"-k", "--kappa_tot",
-	"-s", "--shear",
+	"-y", "--shear",
+	"-s", "--smooth_fraction",
 	"-t", "--theta_e",
-	"-ks", "--kappa_star",
+	"-mf", "--mass_function",
+	"-ms", "--m_solar",
+	"-ml", "--m_lower",
+	"-mh", "--m_upper",
 	"-r", "--rectangular",
 	"-a", "--approx",
 	"-ts", "--taylor",
@@ -48,6 +54,12 @@ const std::string OPTS[OPTS_SIZE] =
 	"-ot", "--outfile_type",
 	"-o", "--outfile_prefix"
 };
+const std::map<std::string, enumMassFunction> MASS_FUNCTIONS{
+	{"equal", equal},
+	{"uniform", uniform},
+	{"salpeter", salpeter},
+	{"kroupa", kroupa}
+};
 
 
 /******************************************************************************
@@ -56,8 +68,12 @@ default input option values
 bool verbose = false;
 dtype kappa_tot = static_cast<dtype>(0.3);
 dtype shear = static_cast<dtype>(0.3);
+dtype smooth_fraction = static_cast<dtype>(0.1);
 dtype theta_e = static_cast<dtype>(1);
-dtype kappa_star = static_cast<dtype>(0.27);
+std::string mass_function_str = "equal";
+dtype m_solar = static_cast<dtype>(1);
+dtype m_lower = static_cast<dtype>(0.01);
+dtype m_upper = static_cast<dtype>(10);
 int rectangular = 1;
 int approx = 1;
 int taylor = 1;
@@ -68,15 +84,6 @@ int num_branches = 1;
 int random_seed = 0;
 std::string outfile_type = ".bin";
 std::string outfile_prefix = "./";
-
-/******************************************************************************
-default derived parameter values
-number of stars, upper and lower mass cutoffs, <m>, and <m^2>
-******************************************************************************/
-dtype m_lower = static_cast<dtype>(1);
-dtype m_upper = static_cast<dtype>(1);
-dtype mean_mass = static_cast<dtype>(1);
-dtype mean_squared_mass = static_cast<dtype>(1);
 
 
 
@@ -98,62 +105,71 @@ void display_usage(char* name)
 	std::cout
 		<< "                                                                               \n"
 		<< "Options:\n"
-		<< "  -h,--help            Show this help message\n"
-		<< "  -v,--verbose         Toggle verbose output. Takes no option value.\n"
-		<< "  -k,--kappa_tot       Specify the total convergence. Default value: " << kappa_tot << "\n"
-		<< "  -s,--shear           Specify the shear. Default value: " << shear << "\n"
-		<< "  -t,--theta_e         Specify the size of the Einstein radius of a unit mass\n"
-		<< "                       point lens in arbitrary units. Default value: " << theta_e << "\n"
-		<< "  -ks,--kappa_star     Specify the convergence in point mass lenses.\n"
-		<< "                       Default value: " << kappa_star << "\n"
-		<< "  -r,--rectangular     Specify whether the star field should be rectangular (1)\n"
-		<< "                       or circular (0). Default value: " << rectangular << "\n"
-		<< "  -a,--approx          Specify whether terms for alpha_smooth should be\n"
-		<< "                       approximated (1) or exact (0). Default value: " << approx << "\n"
-		<< "  -ts,--taylor         Specify the highest degree for the Taylor series of\n"
-		<< "                       alpha_smooth. Default value: " << taylor << "\n"
-		<< "  -ns,--num_stars      Specify the number of stars desired. Default value: " << num_stars << "\n"
-		<< "                       All stars are taken to be of unit mass. If a range of\n"
-		<< "                       masses are desired, please input them through a file as\n"
-		<< "                       described in the -sf option.\n"
-		<< "  -sf,--starfile       Specify the location of a star positions and masses\n"
-		<< "                       file. The file may be either a whitespace delimited text\n"
-		<< "                       file containing valid values for a star's x coordinate,\n"
-		<< "                       y coordinate, and mass, in that order, on each line, or\n"
-		<< "                       a binary file of star structures (as defined in this\n"
-		<< "                       source code). If specified, the number of stars is\n"
-		<< "                       determined through this file and the -ns option is\n"
-		<< "                       ignored.\n"
-		<< "  -np,--num_phi        Specify the number of steps used to vary phi in the\n"
-		<< "                       range [0, 2*pi]. Default value: " << num_phi << "\n"
-		<< "  -nb,--num_branches   Specify the number of branches to use for phi in the\n"
-		<< "                       range [0, 2*pi]. Default value: " << num_branches << "\n"
-		<< "  -rs,--random_seed    Specify the random seed for star field generation. A\n"
-		<< "                       value of 0 is reserved for star input files.\n"
-		<< "  -ot,--outfile_type   Specify the type of file to be output. Valid options are\n"
-		<< "                       binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
-		<< "  -o,--outfile_prefix  Specify the prefix to be used in output filenames.\n"
-		<< "                       Default value: " << outfile_prefix << "\n"
-		<< "                       Lines of .txt output files are whitespace delimited.\n"
-		<< "                       Filenames are:\n"
-		<< "                         ccf_parameter_info  various parameter values used in\n"
-		<< "                                               calculations\n"
-		<< "                         ccf_stars           the first item is num_stars\n"
-		<< "                                               followed by binary\n"
-		<< "                                               representations of the star\n"
-		<< "                                               structures\n"
-		<< "                         ccf_ccs             the first item is num_roots and\n"
-		<< "                                               the second item is\n"
-		<< "                                               num_phi / num_branches + 1\n"
-		<< "                                               followed by binary\n"
-		<< "                                               representations of the complex\n"
-		<< "                                               critical curve values\n"
-		<< "                         ccf_caustics        the first item is num_roots and\n"
-		<< "                                               the second item is\n"
-		<< "                                               num_phi / num_branches + 1\n"
-		<< "                                               followed by binary\n"
-		<< "                                               representations of the complex\n"
-		<< "                                               caustic curve values\n";
+		<< "  -h,--help             Show this help message\n"
+		<< "  -v,--verbose          Toggle verbose output. Takes no option value.\n"
+		<< "  -k,--kappa_tot        Specify the total convergence. Default value: " << kappa_tot << "\n"
+		<< "  -y,--shear            Specify the shear. Default value: " << shear << "\n"
+		<< "  -s,--smooth_fraction  Specify the fraction of convergence due to smoothly\n"
+		<< "                        distributed mass. Default value: " << smooth_fraction << "\n"
+		<< "  -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
+		<< "                        point lens in arbitrary units. Default value: " << theta_e << "\n"
+		<< "  -mf,--mass_function   Specify the mass function to use for the point mass\n"
+		<< "                        lenses. Options are: equal, uniform, Salpeter, and\n"
+		<< "                        Kroupa. Default value: " << mass_function_str << "\n"
+		<< "  -ms,--m_solar         Specify the solar mass in arbitrary units.\n"
+		<< "                        Default value: " << m_solar << "\n"
+		<< "  -ml,--m_lower         Specify the lower mass cutoff in arbitrary units.\n"
+		<< "                        Default value: " << m_lower << "\n"
+		<< "  -ml,--m_upper         Specify the upper mass cutoff in arbitrary units.\n"
+		<< "                        Default value: " << m_upper << "\n"
+		<< "  -r,--rectangular      Specify whether the star field should be\n"
+		<< "                        rectangular (1) or circular (0). Default value: " << rectangular << "\n"
+		<< "  -a,--approx           Specify whether terms for alpha_smooth should be\n"
+		<< "                        approximated (1) or exact (0). Default value: " << approx << "\n"
+		<< "  -ts,--taylor          Specify the highest degree for the Taylor series of\n"
+		<< "                        alpha_smooth. Default value: " << taylor << "\n"
+		<< "  -ns,--num_stars       Specify the number of stars desired. Default value: " << num_stars << "\n"
+		<< "                        All stars are taken to be of unit mass. If a range of\n"
+		<< "                        masses are desired, please input them through a file as\n"
+		<< "                        described in the -sf option.\n"
+		<< "  -sf,--starfile        Specify the location of a star positions and masses\n"
+		<< "                        file. The file may be either a whitespace delimited\n"
+		<< "                        text file containing valid values for a star's x\n"
+		<< "                        coordinate, y coordinate, and mass, in that order, on\n"
+		<< "                        each line, or a binary file of star structures (as\n"
+		<< "                        defined in this source code). If specified, the number\n"
+		<< "                        of stars is determined through this file and the -ns\n"
+		<< "                        option is ignored.\n"
+		<< "  -np,--num_phi         Specify the number of steps used to vary phi in the\n"
+		<< "                        range [0, 2*pi]. Default value: " << num_phi << "\n"
+		<< "  -nb,--num_branches    Specify the number of branches to use for phi in the\n"
+		<< "                        range [0, 2*pi]. Default value: " << num_branches << "\n"
+		<< "  -rs,--random_seed     Specify the random seed for star field generation. A\n"
+		<< "                        value of 0 is reserved for star input files.\n"
+		<< "  -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
+		<< "                        are binary (.bin) or text (.txt). Default value: " << outfile_type << "\n"
+		<< "  -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
+		<< "                        Default value: " << outfile_prefix << "\n"
+		<< "                        Lines of .txt output files are whitespace delimited.\n"
+		<< "                        Filenames are:\n"
+		<< "                          ccf_parameter_info  various parameter values used in\n"
+		<< "                                                calculations\n"
+		<< "                          ccf_stars           the first item is num_stars\n"
+		<< "                                                followed by binary\n"
+		<< "                                                representations of the star\n"
+		<< "                                                structures\n"
+		<< "                          ccf_ccs             the first item is num_roots and\n"
+		<< "                                                the second item is\n"
+		<< "                                                num_phi / num_branches + 1\n"
+		<< "                                                followed by binary\n"
+		<< "                                                representations of the complex\n"
+		<< "                                                critical curve values\n"
+		<< "                          ccf_caustics        the first item is num_roots and\n"
+		<< "                                                the second item is\n"
+		<< "                                                num_phi / num_branches + 1\n"
+		<< "                                                followed by binary\n"
+		<< "                                                representations of the complex\n"
+		<< "                                                caustic curve values\n";
 }
 
 
@@ -247,7 +263,7 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-s") || argv[i] == std::string("--shear"))
+		else if (argv[i] == std::string("-y") || argv[i] == std::string("--shear"))
 		{
 			try
 			{
@@ -260,6 +276,32 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid shear input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-s") || argv[i] == std::string("--smooth_fraction"))
+		{
+			try
+			{
+				smooth_fraction = static_cast<dtype>(std::stod(cmdinput));
+				if (smooth_fraction < std::numeric_limits<dtype>::min())
+				{
+					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be > " << std::numeric_limits<dtype>::min() << "\n";
+					return -1;
+				}
+				else if (smooth_fraction >= 1)
+				{
+					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be < 1\n";
+					return -1;
+				}
+				if (verbose)
+				{
+					std::cout << "smooth_fraction set to: " << smooth_fraction << "\n";
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid smooth_fraction input.\n";
 				return -1;
 			}
 		}
@@ -284,24 +326,85 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_star"))
+		else if (argv[i] == std::string("-mf") || argv[i] == std::string("--mass_function"))
+		{
+			mass_function_str = cmdinput;
+			make_lowercase(mass_function_str);
+			if (!MASS_FUNCTIONS.count(mass_function_str))
+			{
+				std::cerr << "Error. Invalid mass_function input. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
+				return -1;
+			}
+			if (verbose)
+			{
+				std::cout << "mass_function set to: " << mass_function_str << "\n";
+			}
+		}
+		else if (argv[i] == std::string("-ms") || argv[i] == std::string("--m_solar"))
 		{
 			try
 			{
-				kappa_star = static_cast<dtype>(std::stod(cmdinput));
-				if (kappa_star < std::numeric_limits<dtype>::min())
+				m_solar = static_cast<dtype>(std::stod(cmdinput));
+				if (m_solar < std::numeric_limits<dtype>::min())
 				{
-					std::cerr << "Error. Invalid kappa_star input. kappa_star must be > " << std::numeric_limits<dtype>::min() << "\n";
+					std::cerr << "Error. Invalid m_solar input. m_solar must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
 				}
 				if (verbose)
 				{
-					std::cout << "kappa_star set to: " << kappa_star << "\n";
+					std::cout << "m_solar set to: " << m_solar << "\n";
 				}
 			}
 			catch (...)
 			{
-				std::cerr << "Error. Invalid kappa_star input.\n";
+				std::cerr << "Error. Invalid m_solar input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ml") || argv[i] == std::string("--m_lower"))
+		{
+			try
+			{
+				m_lower = static_cast<dtype>(std::stod(cmdinput));
+				if (m_lower < std::numeric_limits<dtype>::min())
+				{
+					std::cerr << "Error. Invalid m_lower input. m_lower must be > " << std::numeric_limits<dtype>::min() << "\n";
+					return -1;
+				}
+				if (verbose)
+				{
+					std::cout << "m_lower set to: " << m_lower << "\n";
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid m_lower input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-mh") || argv[i] == std::string("--m_upper"))
+		{
+			try
+			{
+				m_upper = static_cast<dtype>(std::stod(cmdinput));
+				if (m_upper < std::numeric_limits<dtype>::min())
+				{
+					std::cerr << "Error. Invalid m_upper input. m_upper must be > " << std::numeric_limits<dtype>::min() << "\n";
+					return -1;
+				}
+				else if (m_upper > std::numeric_limits<dtype>::max())
+				{
+					std::cerr << "Error. Invalid m_upper input. m_upper must be < " << std::numeric_limits<dtype>::max() << "\n";
+					return -1;
+				}
+				if (verbose)
+				{
+					std::cout << "m_upper set to: " << m_upper << "\n";
+				}
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid m_upper input.\n";
 				return -1;
 			}
 		}
@@ -463,6 +566,7 @@ int main(int argc, char* argv[])
 		else if (argv[i] == std::string("-ot") || argv[i] == std::string("--outfile_type"))
 		{
 			outfile_type = cmdinput;
+			make_lowercase(outfile_type);
 			if (outfile_type != ".bin" && outfile_type != ".txt")
 			{
 				std::cerr << "Error. Invalid outfile_type. outfile_type must be .bin or .txt\n";
@@ -487,6 +591,12 @@ int main(int argc, char* argv[])
 	if (num_phi % (2 * num_branches) != 0)
 	{
 		std::cerr << "Error. Invalid num_phi input. num_phi must be a multiple of 2*num_branches\n";
+		return -1;
+	}
+
+	if (m_lower >= m_upper)
+	{
+		std::cerr << "Error. m_lower must be less than m_upper.\n";
 		return -1;
 	}
 
@@ -527,14 +637,32 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
-	if star file is specified, check validity of values and set num_stars, m_lower,
-	m_upper, mean_mass, and mean_squared_mass based on star information
+	determine convergence in point mass lenses, mass function, <m>, and <m^2>
+	******************************************************************************/
+	dtype kappa_star = (1 - smooth_fraction) * kappa_tot;
+	enumMassFunction mass_function = MASS_FUNCTIONS.at(mass_function_str);
+	dtype mean_mass = MassFunction<dtype>(mass_function).mean_mass(m_solar, m_lower, m_upper);
+	dtype mean_mass2 = MassFunction<dtype>(mass_function).mean_mass2(m_solar, m_lower, m_upper);
+
+	/******************************************************************************
+	calculated values for the upper and lower mass cutoffs, <m>, and <m^2>
+	******************************************************************************/
+	dtype m_lower_actual = static_cast<dtype>(1);
+	dtype m_upper_actual = static_cast<dtype>(1);
+	dtype mean_mass_actual = static_cast<dtype>(1);
+	dtype mean_mass2_actual = static_cast<dtype>(1);
+
+
+	/******************************************************************************
+	if star file is specified, check validity of values and set num_stars,
+	m_lower_actual, m_upper_actual, mean_mass_actual, and mean_mass2_actual based
+	on star information
 	******************************************************************************/
 	if (starfile != "")
 	{
 		std::cout << "Calculating some parameter values based on star input file " << starfile << "\n";
 
-		if (!read_star_params<dtype>(num_stars, m_lower, m_upper, mean_mass, mean_squared_mass, starfile))
+		if (!read_star_params<dtype>(num_stars, m_lower_actual, m_upper_actual, mean_mass_actual, mean_mass2_actual, starfile))
 		{
 			std::cerr << "Error. Unable to read star field parameters from file " << starfile << "\n";
 			return -1;
@@ -674,15 +802,21 @@ int main(int argc, char* argv[])
 		if (cuda_error("initialize_curand_states_kernel", true, __FILE__, __LINE__)) return -1;
 		if (rectangular)
 		{
-			generate_rectangular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, c, static_cast<dtype>(1));
+			generate_rectangular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, c, mass_function, m_solar, m_lower, m_upper);
 		}
 		else
 		{
-			generate_circular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, rad, static_cast<dtype>(1));
+			generate_circular_star_field_kernel<dtype> <<<blocks, threads>>> (states, stars, num_stars, rad, mass_function, m_solar, m_lower, m_upper);
 		}
 		if (cuda_error("generate_star_field_kernel", true, __FILE__, __LINE__)) return -1;
 
 		std::cout << "Done generating star field.\n\n";
+
+		/******************************************************************************
+		calculate m_lower_actual, m_upper_actual, mean_mass_actual, and
+		mean_mass2_actual based on star information
+		******************************************************************************/
+		calculate_star_params<dtype>(stars, num_stars, m_lower_actual, m_upper_actual, mean_mass_actual, mean_mass2_actual);
 	}
 	else
 	{
@@ -1000,12 +1134,28 @@ int main(int argc, char* argv[])
 	outfile << "kappa_tot " << kappa_tot << "\n";
 	outfile << "shear " << shear << "\n";
 	outfile << "mu_ave " << mu_ave << "\n";
-	outfile << "theta_e " << theta_e << "\n";
+	outfile << "smooth_fraction " << smooth_fraction << "\n";
 	outfile << "kappa_star " << kappa_star << "\n";
-	outfile << "lower_mass_cutoff " << m_lower << "\n";
-	outfile << "upper_mass_cutoff " << m_upper << "\n";
+	outfile << "theta_e " << theta_e << "\n";
+	outfile << "mass_function " << mass_function_str << "\n";
+	if (mass_function_str == "salpeter" || mass_function_str == "kroupa")
+	{
+		outfile << "m_solar " << m_solar << "\n";
+	}
+	if (mass_function_str != "equal")
+	{
+		outfile << "m_lower " << m_lower << "\n";
+		outfile << "m_upper " << m_upper << "\n";
+		outfile << "m_lower_actual " << m_lower_actual << "\n";
+		outfile << "m_upper_actual " << m_upper_actual << "\n";
+	}
 	outfile << "mean_mass " << mean_mass << "\n";
-	outfile << "mean_squared_mass " << mean_squared_mass << "\n";
+	outfile << "mean_mass2 " << mean_mass2 << "\n";
+	if (mass_function_str != "equal")
+	{
+		outfile << "mean_mass_actual " << mean_mass_actual << "\n";
+		outfile << "mean_mass2_actual " << mean_mass2_actual << "\n";
+	}
 	outfile << "num_stars " << num_stars << "\n";
 	if (rectangular)
 	{

@@ -15,7 +15,7 @@
     <CudaCompile Include="ccf_read_write_files.cuh" />
     <CudaCompile Include="complex.cuh" />
     <ClInclude Include="util.hpp" />
-    <CudaCompile Include="mass_function.cu" />
+    <CudaCompile Include="mass_function.cuh" />
     <CudaCompile Include="star.cuh" />
   </ItemGroup>
   <ItemGroup>

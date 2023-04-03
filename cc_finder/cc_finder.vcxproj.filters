@@ -29,6 +29,9 @@
     <CudaCompile Include="star.cuh">
       <Filter>include</Filter>
     </CudaCompile>
+    <CudaCompile Include="mass_function.cuh">
+      <Filter>include</Filter>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />

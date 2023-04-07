@@ -635,7 +635,7 @@ int main(int argc, char* argv[])
 		smooth_fraction = 1 - kappa_star / kappa_tot;
 		if (verbose)
 		{
-			std::cout << "smooth_fraction set to: " << smooth_fraction << "\n";
+			std::cout << "smooth_fraction set to: " << smooth_fraction << "\n\n";
 		}
 	}
 	else
@@ -643,7 +643,7 @@ int main(int argc, char* argv[])
 		kappa_star = (1 - smooth_fraction) * kappa_tot;
 		if (verbose)
 		{
-			std::cout << "kappa_star set to: " << kappa_star << "\n";
+			std::cout << "kappa_star set to: " << kappa_star << "\n\n";
 		}
 	}
 

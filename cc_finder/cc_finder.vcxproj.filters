@@ -12,25 +12,25 @@
     <ClInclude Include="util.hpp">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="ccf_microlensing.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="ccf_read_write_files.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="complex.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="mass_function.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="star.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu">
       <Filter>src</Filter>
-    </CudaCompile>
-    <CudaCompile Include="ccf_microlensing.cuh">
-      <Filter>include</Filter>
-    </CudaCompile>
-    <CudaCompile Include="ccf_read_write_files.cuh">
-      <Filter>include</Filter>
-    </CudaCompile>
-    <CudaCompile Include="complex.cuh">
-      <Filter>include</Filter>
-    </CudaCompile>
-    <CudaCompile Include="star.cuh">
-      <Filter>include</Filter>
-    </CudaCompile>
-    <CudaCompile Include="mass_function.cuh">
-      <Filter>include</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>

@@ -11,12 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="ccf_microlensing.cuh" />
-    <CudaCompile Include="ccf_read_write_files.cuh" />
-    <CudaCompile Include="complex.cuh" />
+    <ClInclude Include="ccf_microlensing.cuh" />
+    <ClInclude Include="ccf_read_write_files.cuh" />
+    <ClInclude Include="complex.cuh" />
     <ClInclude Include="util.hpp" />
-    <CudaCompile Include="mass_function.cuh" />
-    <CudaCompile Include="star.cuh" />
+    <ClInclude Include="mass_function.cuh" />
+    <ClInclude Include="star.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu" />

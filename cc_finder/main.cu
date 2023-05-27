@@ -29,7 +29,7 @@ using dtype = double;
 /******************************************************************************
 constants to be used
 ******************************************************************************/
-const dtype PI = static_cast<dtype>(3.1415926535898);
+const dtype PI = 3.1415926535898;
 constexpr int OPTS_SIZE = 2 * 21;
 const std::string OPTS[OPTS_SIZE] =
 {
@@ -67,15 +67,15 @@ const std::map<std::string, enumMassFunction> MASS_FUNCTIONS{
 default input option values
 ******************************************************************************/
 bool verbose = false;
-dtype kappa_tot = static_cast<dtype>(0.3);
-dtype shear = static_cast<dtype>(0.3);
-dtype smooth_fraction = static_cast<dtype>(0.1);
-dtype kappa_star = static_cast<dtype>(0.27);
-dtype theta_e = static_cast<dtype>(1);
+dtype kappa_tot = 0.3;
+dtype shear = 0.3;
+dtype smooth_fraction = 0.1;
+dtype kappa_star = 0.27;
+dtype theta_e = 1;
 std::string mass_function_str = "equal";
-dtype m_solar = static_cast<dtype>(1);
-dtype m_lower = static_cast<dtype>(0.01);
-dtype m_upper = static_cast<dtype>(10);
+dtype m_solar = 1;
+dtype m_lower = 0.01;
+dtype m_upper = 50;
 int rectangular = 1;
 int approx = 1;
 int taylor = 1;
@@ -255,12 +255,7 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				kappa_tot = static_cast<dtype>(std::stod(cmdinput));
-				if (verbose)
-				{
-					std::cout << "kappa_tot set to: " << kappa_tot << "\n";
-				}
-
+				set_param("kappa_tot", kappa_tot, std::stod(cmdinput), verbose);
 			}
 			catch (...)
 			{
@@ -272,11 +267,7 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				shear = static_cast<dtype>(std::stod(cmdinput));
-				if (verbose)
-				{
-					std::cout << "shear set to: " << shear << "\n";
-				}
+				set_param("shear", shear, std::stod(cmdinput), verbose);
 			}
 			catch (...)
 			{
@@ -292,7 +283,7 @@ int main(int argc, char* argv[])
 			}
 			try
 			{
-				smooth_fraction = static_cast<dtype>(std::stod(cmdinput));
+				set_param("smooth_fraction", smooth_fraction, std::stod(cmdinput), verbose);
 				if (smooth_fraction < 0)
 				{
 					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be >= 0\n";
@@ -302,10 +293,6 @@ int main(int argc, char* argv[])
 				{
 					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be < 1\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "smooth_fraction set to: " << smooth_fraction << "\n";
 				}
 			}
 			catch (...)
@@ -318,15 +305,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				kappa_star = static_cast<dtype>(std::stod(cmdinput));
+				set_param("kappa_star", kappa_star, std::stod(cmdinput), verbose);
 				if (kappa_star < std::numeric_limits<dtype>::min())
 				{
 					std::cerr << "Error. Invalid kappa_star input. kappa_star must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "kappa_star set to: " << kappa_star << "\n";
 				}
 			}
 			catch (...)
@@ -339,15 +322,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				theta_e = static_cast<dtype>(std::stod(cmdinput));
+				set_param("theta_e", theta_e, std::stod(cmdinput), verbose);
 				if (theta_e < std::numeric_limits<dtype>::min())
 				{
 					std::cerr << "Error. Invalid theta_e input. theta_e must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "theta_e set to: " << theta_e << "\n";
 				}
 			}
 			catch (...)
@@ -358,31 +337,22 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-mf") || argv[i] == std::string("--mass_function"))
 		{
-			mass_function_str = cmdinput;
-			make_lowercase(mass_function_str);
+			set_param("mass_function", mass_function_str, make_lowercase(cmdinput), verbose);
 			if (!MASS_FUNCTIONS.count(mass_function_str))
 			{
 				std::cerr << "Error. Invalid mass_function input. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
 				return -1;
-			}
-			if (verbose)
-			{
-				std::cout << "mass_function set to: " << mass_function_str << "\n";
 			}
 		}
 		else if (argv[i] == std::string("-ms") || argv[i] == std::string("--m_solar"))
 		{
 			try
 			{
-				m_solar = static_cast<dtype>(std::stod(cmdinput));
+				set_param("m_solar", m_solar, std::stod(cmdinput), verbose);
 				if (m_solar < std::numeric_limits<dtype>::min())
 				{
 					std::cerr << "Error. Invalid m_solar input. m_solar must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "m_solar set to: " << m_solar << "\n";
 				}
 			}
 			catch (...)
@@ -395,15 +365,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				m_lower = static_cast<dtype>(std::stod(cmdinput));
+				set_param("m_lower", m_lower, std::stod(cmdinput), verbose);
 				if (m_lower < std::numeric_limits<dtype>::min())
 				{
 					std::cerr << "Error. Invalid m_lower input. m_lower must be > " << std::numeric_limits<dtype>::min() << "\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "m_lower set to: " << m_lower << "\n";
 				}
 			}
 			catch (...)
@@ -416,7 +382,7 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				m_upper = static_cast<dtype>(std::stod(cmdinput));
+				set_param("m_upper", m_upper, std::stod(cmdinput), verbose);
 				if (m_upper < std::numeric_limits<dtype>::min())
 				{
 					std::cerr << "Error. Invalid m_upper input. m_upper must be > " << std::numeric_limits<dtype>::min() << "\n";
@@ -426,10 +392,6 @@ int main(int argc, char* argv[])
 				{
 					std::cerr << "Error. Invalid m_upper input. m_upper must be < " << std::numeric_limits<dtype>::max() << "\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "m_upper set to: " << m_upper << "\n";
 				}
 			}
 			catch (...)
@@ -442,15 +404,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				rectangular = std::stoi(cmdinput);
+				set_param("rectangular", rectangular, std::stoi(cmdinput), verbose);
 				if (rectangular != 0 && rectangular != 1)
 				{
 					std::cerr << "Error. Invalid rectangular input. rectangular must be 1 (rectangular) or 0 (circular).\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "rectangular set to: " << rectangular << "\n";
 				}
 			}
 			catch (...)
@@ -463,15 +421,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				approx = std::stoi(cmdinput);
+				set_param("approx", approx, std::stoi(cmdinput), verbose);
 				if (approx != 0 && approx != 1)
 				{
 					std::cerr << "Error. Invalid approx input. approx must be 1 (approximate) or 0 (exact).\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "approx set to: " << approx << "\n";
 				}
 			}
 			catch (...)
@@ -484,15 +438,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				taylor = std::stoi(cmdinput);
+				set_param("taylor", taylor, std::stoi(cmdinput), verbose);
 				if (taylor < 1)
 				{
 					std::cerr << "Error. Invalid taylor input. taylor must be an integer > 0\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "taylor set to: " << taylor << "\n";
 				}
 			}
 			catch (...)
@@ -505,15 +455,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				num_stars = std::stoi(cmdinput);
+				set_param("num_stars", num_stars, std::stoi(cmdinput), verbose);
 				if (num_stars < 1)
 				{
 					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "num_stars set to: " << num_stars << "\n";
 				}
 			}
 			catch (...)
@@ -524,25 +470,17 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-sf") || argv[i] == std::string("--starfile"))
 		{
-			starfile = cmdinput;
-			if (verbose)
-			{
-				std::cout << "starfile set to: " << starfile << "\n";
-			}
+			set_param("starfile", starfile, cmdinput, verbose);
 		}
 		else if (argv[i] == std::string("-np") || argv[i] == std::string("--num_phi"))
 		{
 			try
 			{
-				num_phi = std::stoi(cmdinput);
+				set_param("num_phi", num_phi, std::stoi(cmdinput), verbose);
 				if (num_phi < 1 || num_phi % 2 != 0)
 				{
 					std::cerr << "Error. Invalid num_phi input. num_phi must be an even integer > 0\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "num_phi set to: " << num_phi << "\n";
 				}
 			}
 			catch (...)
@@ -555,15 +493,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				num_branches = std::stoi(cmdinput);
+				set_param("num_branches", num_branches, std::stoi(cmdinput), verbose);
 				if (num_branches < 1)
 				{
 					std::cerr << "Error. Invalid num_branches input. num_branches must be an integer > 0\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "num_branches set to: " << num_branches << "\n";
 				}
 			}
 			catch (...)
@@ -576,15 +510,11 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				random_seed = std::stoi(cmdinput);
+				set_param("random_seed", random_seed, std::stoi(cmdinput), verbose);
 				if (random_seed == 0 && !(cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file")))
 				{
 					std::cerr << "Error. Invalid random_seed input. Seed of 0 is reserved for star input files.\n";
 					return -1;
-				}
-				if (verbose)
-				{
-					std::cout << "random_seed set to: " << random_seed << "\n";
 				}
 			}
 			catch (...)
@@ -595,27 +525,19 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ot") || argv[i] == std::string("--outfile_type"))
 		{
-			outfile_type = cmdinput;
-			make_lowercase(outfile_type);
+			set_param("outfile_type", outfile_type, make_lowercase(cmdinput), verbose);
 			if (outfile_type != ".bin" && outfile_type != ".txt")
 			{
 				std::cerr << "Error. Invalid outfile_type. outfile_type must be .bin or .txt\n";
 				return -1;
 			}
-			if (verbose)
-			{
-				std::cout << "outfile_type set to: " << outfile_type << "\n";
-			}
 		}
 		else if (argv[i] == std::string("-o") || argv[i] == std::string("--outfile_prefix"))
 		{
-			outfile_prefix = cmdinput;
-			if (verbose)
-			{
-				std::cout << "outfile_prefix set to: " << outfile_prefix << "\n";
-			}
+			set_param("outfile_prefix", outfile_prefix, cmdinput, verbose);
 		}
 	}
+
 	std::cout << "\n";
 
 	if (num_phi % (2 * num_branches) != 0)
@@ -632,19 +554,11 @@ int main(int argc, char* argv[])
 
 	if (cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star"))
 	{
-		smooth_fraction = 1 - kappa_star / kappa_tot;
-		if (verbose)
-		{
-			std::cout << "smooth_fraction set to: " << smooth_fraction << "\n\n";
-		}
+		set_param("smooth_fraction", smooth_fraction, 1 - kappa_star / kappa_tot, verbose, true);
 	}
 	else
 	{
-		kappa_star = (1 - smooth_fraction) * kappa_tot;
-		if (verbose)
-		{
-			std::cout << "kappa_star set to: " << kappa_star << "\n\n";
-		}
+		set_param("kappa_star", kappa_star, (1 - smooth_fraction) * kappa_tot, verbose, true);
 	}
 
 	/******************************************************************************
@@ -687,8 +601,10 @@ int main(int argc, char* argv[])
 	determine mass function, <m>, and <m^2>
 	******************************************************************************/
 	enumMassFunction mass_function = MASS_FUNCTIONS.at(mass_function_str);
-	dtype mean_mass = MassFunction<dtype>(mass_function).mean_mass(m_solar, m_lower, m_upper);
-	dtype mean_mass2 = MassFunction<dtype>(mass_function).mean_mass2(m_solar, m_lower, m_upper);
+	dtype mean_mass;
+	set_param("mean_mass", mean_mass, MassFunction<dtype>(mass_function).mean_mass(m_solar, m_lower, m_upper), verbose);
+	dtype mean_mass2;
+	set_param("mean_mass2", mean_mass2, MassFunction<dtype>(mass_function).mean_mass2(m_solar, m_lower, m_upper), verbose, true);
 
 	/******************************************************************************
 	calculated values for kappa_star, upper and lower mass cutoffs, <m>, and <m^2>
@@ -726,24 +642,31 @@ int main(int argc, char* argv[])
 	/******************************************************************************
 	average magnification of the system
 	******************************************************************************/
-	dtype mu_ave = 1 / ((1 - kappa_tot) * (1 - kappa_tot) - shear * shear);
+	dtype mu_ave;
+	set_param("mu_ave", mu_ave, 1 / ((1 - kappa_tot) * (1 - kappa_tot) - shear * shear), verbose, true);
 
 	std::cout << "Number of stars used: " << num_stars << "\n\n";
 
-	Complex<dtype> c = std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
+	Complex<dtype> c;
+	set_param("corner", c,
+		std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
 		* Complex<dtype>(
 			std::sqrt(std::abs((1 - kappa_tot - shear) / (1 - kappa_tot + shear))),
 			std::sqrt(std::abs((1 - kappa_tot + shear) / (1 - kappa_tot - shear)))
-			);
-	dtype rad = std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star);
+			),
+		verbose && rectangular);
+
+	dtype rad;
+	set_param("rad", rad, std::sqrt(theta_e* theta_e* num_stars* mean_mass / kappa_star), verbose && !rectangular);
 
 	/******************************************************************************
 	number of roots to be found
 	******************************************************************************/
-	int num_roots = 2 * num_stars;
+	int num_roots;
+	set_param("num_roots", num_roots, 2 * num_stars, verbose, true && !(rectangular && approx));
 	if (rectangular && approx)
 	{
-		num_roots += static_cast<int>(taylor / 2) * 2;
+		set_param("num_roots", num_roots, num_roots + static_cast<int>(taylor / 2) * 2, verbose, true);
 	}
 
 
@@ -843,7 +766,7 @@ int main(int argc, char* argv[])
 		******************************************************************************/
 		if (random_seed == 0)
 		{
-			random_seed = static_cast<int>(std::chrono::system_clock::now().time_since_epoch().count());
+			set_param("random_seed", random_seed, static_cast<int>(std::chrono::system_clock::now().time_since_epoch().count()), verbose);
 		}
 
 		/******************************************************************************
@@ -882,7 +805,7 @@ int main(int argc, char* argv[])
 		/******************************************************************************
 		ensure random seed is 0 to denote that stars come from external file
 		******************************************************************************/
-		random_seed = 0;
+		set_param("random_seed", random_seed, 0, verbose);
 
 		std::cout << "Reading star field from file " << starfile << "\n";
 
@@ -971,15 +894,15 @@ int main(int argc, char* argv[])
 	/******************************************************************************
 	start and end time for timing purposes
 	******************************************************************************/
-	std::chrono::high_resolution_clock::time_point starttime;
-	std::chrono::high_resolution_clock::time_point endtime;
+	std::chrono::high_resolution_clock::time_point t_start;
+	std::chrono::high_resolution_clock::time_point t_end;
 
 
 	/******************************************************************************
 	begin finding initial roots and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding initial roots...\n";
-	starttime = std::chrono::high_resolution_clock::now();
+	t_start = std::chrono::high_resolution_clock::now();
 
 	/******************************************************************************
 	each iteration of this loop calculates updated positions of all roots for the
@@ -998,8 +921,8 @@ int main(int argc, char* argv[])
 			rectangular, c, approx, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
-	endtime = std::chrono::high_resolution_clock::now();
-	double t_init_roots = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
+	t_end = std::chrono::high_resolution_clock::now();
+	double t_init_roots = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
 
 	std::cout << "\nDone finding roots. Elapsed time: " << t_init_roots << " seconds.\n";
 
@@ -1060,7 +983,7 @@ int main(int argc, char* argv[])
 	begin finding critical curves and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding critical curve positions...\n";
-	starttime = std::chrono::high_resolution_clock::now();
+	t_start = std::chrono::high_resolution_clock::now();
 
 	/******************************************************************************
 	the outer loop will step through different values of phi
@@ -1101,8 +1024,8 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	endtime = std::chrono::high_resolution_clock::now();
-	double t_ccs = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
+	t_end = std::chrono::high_resolution_clock::now();
+	double t_ccs = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
 	std::cout << "\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n\n";
 
 
@@ -1153,22 +1076,22 @@ int main(int argc, char* argv[])
 	{
 		std::cout << "Transposing critical curve array...\n";
 	}
-	starttime = std::chrono::high_resolution_clock::now();
+	t_start = std::chrono::high_resolution_clock::now();
 	transpose_array_kernel<dtype> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 	if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return -1;
-	endtime = std::chrono::high_resolution_clock::now();
+	t_end = std::chrono::high_resolution_clock::now();
 	if (verbose)
 	{
-		std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0 << " seconds.\n\n";
+		std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0 << " seconds.\n\n";
 	}
 	
 	std::cout << "Finding caustic positions...\n";
-	starttime = std::chrono::high_resolution_clock::now();
+	t_start = std::chrono::high_resolution_clock::now();
 	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
 		rectangular, c, approx, taylor, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
-	endtime = std::chrono::high_resolution_clock::now();
-	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(endtime - starttime).count() / 1000.0;
+	t_end = std::chrono::high_resolution_clock::now();
+	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
 	std::cout << "Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n";
 
 

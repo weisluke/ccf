@@ -16,11 +16,11 @@ __device__ T heaviside(T x)
 {
 	if (x > 0)
 	{
-		return static_cast<T>(1);
+		return 1;
 	}
 	else
 	{
-		return static_cast<T>(0);
+		return 0;
 	}
 }
 
@@ -38,11 +38,11 @@ __device__ T boxcar(Complex<T> z, Complex<T> corner)
 {
 	if (-corner.re < z.re && z.re < corner.re && -corner.im < z.im && z.im < corner.im)
 	{
-		return static_cast<T>(1);
+		return 1;
 	}
 	else
 	{
-		return static_cast<T>(0);
+		return 0;
 	}
 }
 
@@ -77,23 +77,23 @@ __device__ Complex<T> star_deflection(Complex<T> z, T theta, star<T>* stars, int
 	return alpha_star_bar.conj();
 }
 
-/***************************************************************************
+/******************************************************************************
 calculate the deflection angle due to smooth matter
 
 \param z -- complex image plane position
 \param kappastar -- convergence in point mass lenses
 \param rectangular -- whether the star field is rectangular or not
-\param corner -- complex number denoting the corner of the
-				 rectangular field of point mass lenses
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
 \param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return alpha_smooth
-***************************************************************************/
+******************************************************************************/
 template <typename T>
 __device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
-	T PI = static_cast<T>(3.1415926535898);
+	T PI = 3.1415926535898;
 	Complex<T> alpha_smooth;
 
 	if (rectangular)
@@ -245,7 +245,7 @@ respect to zbar
 template <typename T>
 __device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
-	T PI = static_cast<T>(3.1415926535898);
+	T PI = 3.1415926535898;
 	Complex<T> d_alpha_smooth_d_zbar;
 
 	if (rectangular)
@@ -372,7 +372,7 @@ with respect to zbar^2
 template <typename T>
 __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
 {
-	T PI = static_cast<T>(3.1415926535898);
+	T PI = 3.1415926535898;
 	Complex<T> d2_alpha_smooth_d_zbar2;
 
 	if (rectangular)
@@ -471,7 +471,7 @@ template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
 	int rectangular, Complex<T> corner, int approx, int taylor, T phi, Complex<T>* roots, int nroots)
 {
-	Complex<T> f0 = parametric_critical_curve<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi);
+	Complex<T> f0 = parametric_critical_curve(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi);
 	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
 
 	/******************************************************************************
@@ -479,13 +479,13 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired
 	******************************************************************************/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001) &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < static_cast<T>(0.000000001))
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < 0.000000001 &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < 0.000000001)
 	{
 		return z;
 	}
 
-	Complex<T> f1 = d_parametric_critical_curve_dz<T>(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> f1 = d_parametric_critical_curve_dz(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 
 	/******************************************************************************
 	contribution due to distance between root and stars
@@ -641,7 +641,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					******************************************************************************/
 
 					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-					result = find_critical_curve_root<T>(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
+					result = find_critical_curve_root(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 					/******************************************************************************
 					distance between old root and new root in units of theta_e
@@ -652,7 +652,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					compare position to previous value, if less than desired precision of 10^-9,
 					set fin[root] to true
 					******************************************************************************/
-					if (norm < static_cast<T>(0.000000001))
+					if (norm < 0.000000001)
 					{
 						fin[c * 2 * nroots + b * nroots + a] = true;
 					}
@@ -719,7 +719,7 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 				the value of 1/mu depends on the value of f0
 				this calculation ensures that the maximum possible value of 1/mu is given
 				******************************************************************************/
-				Complex<T> f0 = parametric_critical_curve<T>(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
+				Complex<T> f0 = parametric_critical_curve(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
 
 				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
 				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
@@ -804,7 +804,7 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 		/******************************************************************************
 		map image plane positions to source plane positions
 		******************************************************************************/
-		w[a] = complex_image_to_source<T>(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
+		w[a] = complex_image_to_source(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
 	}
 }
 

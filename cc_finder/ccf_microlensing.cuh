@@ -62,16 +62,12 @@ __device__ Complex<T> star_deflection(Complex<T> z, T theta, star<T>* stars, int
 	Complex<T> alpha_star_bar;
 
 	/******************************************************************************
-	sum m_i / (z - z_i)
+	theta^2 * sum(m_i / (z - z_i))
 	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		alpha_star_bar += stars[i].mass / (z - stars[i].position);
 	}
-
-	/******************************************************************************
-	theta_e^2 * ( sum m_i / (z - z_i) )
-	******************************************************************************/
 	alpha_star_bar *= (theta * theta);
 
 	return alpha_star_bar.conj();
@@ -186,16 +182,12 @@ __device__ Complex<T> d_star_deflection_d_zbar(Complex<T> z, T theta, star<T>* s
 	Complex<T> d_alpha_star_bar_d_z;
 
 	/******************************************************************************
-	sum m_i / (z - z_i)^2
+	-theta^2 * sum(m_i / (z - z_i)^2)
 	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		d_alpha_star_bar_d_z += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position));
 	}
-
-	/******************************************************************************
-	-theta_e^2 * ( sum m_i / (z - z_i)^2 )
-	******************************************************************************/
 	d_alpha_star_bar_d_z *= -(theta * theta);
 
 	return d_alpha_star_bar_d_z.conj();
@@ -340,16 +332,12 @@ __device__ Complex<T> d2_star_deflection_d_zbar2(Complex<T> z, T theta, star<T>*
 	Complex<T> d2_alpha_star_bar_d_z2;
 
 	/******************************************************************************
-	sum m_i / (z - z_i)^3
+	2 * theta^2 * sum(m_i / (z - z_i)^3)
 	******************************************************************************/
 	for (int i = 0; i < nstars; i++)
 	{
 		d2_alpha_star_bar_d_z2 += stars[i].mass / ((z - stars[i].position) * (z - stars[i].position) * (z - stars[i].position));
 	}
-
-	/******************************************************************************
-	2 * theta_e^2 * ( sum m_i / (z - z_i)^3 )
-	******************************************************************************/
 	d2_alpha_star_bar_d_z2 *= (2 * theta * theta);
 
 	return d2_alpha_star_bar_d_z2.conj();
@@ -720,9 +708,10 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 				this calculation ensures that the maximum possible value of 1/mu is given
 				******************************************************************************/
 				Complex<T> f0 = parametric_critical_curve(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
+				Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z[center + sgn * j * nroots + a], kappastar, rectangular, corner, approx, taylor);
 
-				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
-				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa + kappastar * boxcar(z[center + sgn * j * nroots + a], corner))));
+				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs()));
+				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs()));
 
 				/******************************************************************************
 				return maximum possible error in 1/mu at root position

@@ -27,6 +27,9 @@
     <ClInclude Include="star.cuh">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="stopwatch.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu">

@@ -11,6 +11,7 @@ Email: weisluke@alum.mit.edu
 #include "ccf_read_write_files.cuh"
 #include "mass_function.cuh"
 #include "star.cuh"
+#include "stopwatch.cuh"
 #include "util.hpp"
 
 #include <curand_kernel.h>
@@ -598,6 +599,12 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
+	stopwatch for timing purposes
+	******************************************************************************/
+	Stopwatch stopwatch;
+
+
+	/******************************************************************************
 	determine mass function, <m>, and <m^2>
 	******************************************************************************/
 	enumMassFunction mass_function = MASS_FUNCTIONS.at(mass_function_str);
@@ -657,7 +664,7 @@ int main(int argc, char* argv[])
 		verbose && rectangular);
 
 	dtype rad;
-	set_param("rad", rad, std::sqrt(theta_e* theta_e* num_stars* mean_mass / kappa_star), verbose && !rectangular);
+	set_param("rad", rad, std::sqrt(theta_e * theta_e * num_stars * mean_mass / kappa_star), verbose && !rectangular);
 
 	/******************************************************************************
 	number of roots to be found
@@ -764,7 +771,7 @@ int main(int argc, char* argv[])
 		/******************************************************************************
 		if random seed was not provided, get one based on the time
 		******************************************************************************/
-		if (random_seed == 0)
+		while (random_seed == 0)
 		{
 			set_param("random_seed", random_seed, static_cast<int>(std::chrono::system_clock::now().time_since_epoch().count()), verbose);
 		}
@@ -841,10 +848,7 @@ int main(int argc, char* argv[])
 	/******************************************************************************
 	initialize roots for centers of all branches to lie at starpos +/- 1
 	******************************************************************************/
-	if (verbose)
-	{
-		std::cout << "Initializing root positions...\n";
-	}
+	print_verbose("Initializing root positions...\n", verbose);
 	for (int j = 0; j < num_branches; j++)
 	{
 		int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
@@ -863,10 +867,7 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	if (verbose)
-	{
-		std::cout << "Done initializing root positions.\n\n";
-	}
+	print_verbose("Done initializing root positions.\n\n", verbose);
 
 	/******************************************************************************
 	initialize values of whether roots have been found to false
@@ -892,17 +893,10 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
-	start and end time for timing purposes
-	******************************************************************************/
-	std::chrono::high_resolution_clock::time_point t_start;
-	std::chrono::high_resolution_clock::time_point t_end;
-
-
-	/******************************************************************************
 	begin finding initial roots and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding initial roots...\n";
-	t_start = std::chrono::high_resolution_clock::now();
+	stopwatch.start();
 
 	/******************************************************************************
 	each iteration of this loop calculates updated positions of all roots for the
@@ -921,19 +915,14 @@ int main(int argc, char* argv[])
 			rectangular, c, approx, taylor, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 		if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return -1;
 	}
-	t_end = std::chrono::high_resolution_clock::now();
-	double t_init_roots = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
-
+	double t_init_roots = stopwatch.stop();
 	std::cout << "\nDone finding roots. Elapsed time: " << t_init_roots << " seconds.\n";
 
 
 	/******************************************************************************
 	calculate errors in 1/mu for initial roots
 	******************************************************************************/
-	if (verbose)
-	{
-		std::cout << "Calculating maximum errors in 1/mu...\n";
-	}
+	print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
 	find_errors_kernel<dtype> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
 		rectangular, c, approx, taylor, 0, num_phi, num_branches, errs);
 	if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return -1;
@@ -965,10 +954,7 @@ int main(int argc, char* argv[])
 		if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return -1;
 	}
 	dtype max_error = errs[0];
-	if (verbose)
-	{
-		std::cout << "Done calculating maximum errors in 1/mu.\n";
-	}
+	print_verbose("Done calculating maximum errors in 1/mu.\n", verbose);
 	std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 
@@ -983,7 +969,7 @@ int main(int argc, char* argv[])
 	begin finding critical curves and calculate time taken in seconds
 	******************************************************************************/
 	std::cout << "Finding critical curve positions...\n";
-	t_start = std::chrono::high_resolution_clock::now();
+	stopwatch.start();
 
 	/******************************************************************************
 	the outer loop will step through different values of phi
@@ -1023,9 +1009,7 @@ int main(int argc, char* argv[])
 			print_progress(j, num_phi / (2 * num_branches));
 		}
 	}
-
-	t_end = std::chrono::high_resolution_clock::now();
-	double t_ccs = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
+	double t_ccs = stopwatch.stop();
 	std::cout << "\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n\n";
 
 
@@ -1072,26 +1056,18 @@ int main(int argc, char* argv[])
 	set_threads(threads, 512);
 	set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
-	if (verbose)
-	{
-		std::cout << "Transposing critical curve array...\n";
-	}
-	t_start = std::chrono::high_resolution_clock::now();
+	print_verbose("Transposing critical curve array...\n", verbose);
+	stopwatch.start();
 	transpose_array_kernel<dtype> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 	if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return -1;
-	t_end = std::chrono::high_resolution_clock::now();
-	if (verbose)
-	{
-		std::cout << "Done transposing critical curve array. Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0 << " seconds.\n\n";
-	}
+	print_verbose("Done transposing critical curve array. Elapsed time: " + std::to_string(stopwatch.stop()) + " seconds.\n\n", verbose);
 	
 	std::cout << "Finding caustic positions...\n";
-	t_start = std::chrono::high_resolution_clock::now();
+	stopwatch.start();
 	find_caustics_kernel<dtype> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star, 
 		rectangular, c, approx, taylor, caustics);
 	if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return -1;
-	t_end = std::chrono::high_resolution_clock::now();
-	double t_caustics = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count() / 1000.0;
+	double t_caustics = stopwatch.stop();
 	std::cout << "Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n";
 
 

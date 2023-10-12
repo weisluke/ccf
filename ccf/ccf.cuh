@@ -57,7 +57,7 @@ public:
 	T m_lower = static_cast<T>(0.01);
 	T m_upper = static_cast<T>(50);
 	int rectangular = 1;
-	int approx = 0;
+	int approx = 1;
 	int taylor_smooth = 1;
 	int num_stars = 137;
 	std::string starfile = "";

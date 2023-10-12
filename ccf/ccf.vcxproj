@@ -11,10 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ccf_microlensing.cuh" />
-    <ClInclude Include="ccf_read_write_files.cuh" />
+    <ClInclude Include="ccf.cuh" />
+    <ClInclude Include="ccf_functions.cuh" />
     <ClInclude Include="complex.cuh" />
-    <ClInclude Include="stopwatch.cuh" />
+    <ClInclude Include="stopwatch.hpp" />
     <ClInclude Include="util.hpp" />
     <ClInclude Include="mass_function.cuh" />
     <ClInclude Include="star.cuh" />

@@ -3,6 +3,11 @@
 #include "complex.cuh"
 #include "star.cuh"
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
+
 
 /******************************************************************************
 Heaviside Step Function
@@ -82,14 +87,15 @@ calculate the deflection angle due to smooth matter
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 
 \return alpha_smooth
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
+__device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor_smooth)
 {
-	T PI = 3.1415926535898;
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> alpha_smooth;
 
 	if (rectangular)
@@ -101,12 +107,17 @@ __device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangul
 			Complex<T> s3;
 			Complex<T> s4;
 
-			for (int i = 1; i <= taylor; i++)
+			for (int i = taylor_smooth; i >= 1; i--)
 			{
-				s1 += (z.conj() / corner).pow(i) / i;
-				s2 += (z.conj() / corner.conj()).pow(i) / i;
-				s3 += (z.conj() / -corner).pow(i) / i;
-				s4 += (z.conj() / -corner.conj()).pow(i) / i;
+				s1 += 1.0 / i;
+				s2 += 1.0 / i;
+				s3 += 1.0 / i;
+				s4 += 1.0 / i;
+
+				s1 *= (z.conj() / corner);
+				s2 *= (z.conj() / corner.conj());
+				s3 *= (z.conj() / -corner);
+				s4 *= (z.conj() / -corner.conj());
 			}
 
 			alpha_smooth = ((corner - z.conj()) * (corner.log() - s1) - (corner.conj() - z.conj()) * (corner.conj().log() - s2)
@@ -121,7 +132,8 @@ __device__ Complex<T> smooth_deflection(Complex<T> z, T kappastar, int rectangul
 			Complex<T> c3 = -corner - z.conj();
 			Complex<T> c4 = -corner.conj() - z.conj();
 
-			alpha_smooth = Complex<T>(0, -kappastar / PI) * (c1 * c1.log() - c2 * c2.log() + c3 * c3.log() - c4 * c4.log());
+			alpha_smooth = (c1 * c1.log() - c2 * c2.log() + c3 * c3.log() - c4 * c4.log());
+			alpha_smooth *= Complex<T>(0, -kappastar / PI);
 			alpha_smooth -= kappastar * 2 * (corner.re + z.re) * boxcar(z, corner);
 			alpha_smooth -= kappastar * 4 * corner.re * heaviside(corner.im + z.im) * heaviside(corner.im - z.im) * heaviside(z.re - corner.re);
 		}
@@ -148,16 +160,17 @@ lens equation from image plane to source plane
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 
 \return w = (1 - kappa) * z + gamma * z_bar - alpha_star - alpha_smooth
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar,
-	int rectangular, Complex<T> corner, int approx, int taylor)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth)
 {
 	Complex<T> alpha_star = star_deflection(z, theta, stars, nstars);
-	Complex<T> alpha_smooth = smooth_deflection(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> alpha_smooth = smooth_deflection(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	(1 - kappa) * z + gamma * z_bar - alpha_star - alpha_smooth
@@ -203,14 +216,13 @@ respect to z
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
 
 \return d_alpha_smooth_d_z
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
+__device__ T d_smooth_deflection_d_z(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx)
 {
-	Complex<T> d_alpha_smooth_d_z = -kappastar;
+	T d_alpha_smooth_d_z = -kappastar;
 
 	if (rectangular && !approx)
 	{
@@ -230,14 +242,15 @@ respect to zbar
 \param corner -- complex number denoting the corner of the
 				 rectangular field of point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 
 \return d_alpha_smooth_d_zbar
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
+__device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor_smooth)
 {
-	T PI = 3.1415926535898;
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> d_alpha_smooth_d_zbar;
 
 	if (rectangular)
@@ -247,16 +260,24 @@ __device__ Complex<T> d_smooth_deflection_d_zbar(Complex<T> z, T kappastar, int 
 			Complex<T> r1 = z.conj() / corner;
 			Complex<T> r2 = z.conj() / corner.conj();
 
-			for (int i = 2; i <= taylor; i += 2)
+			Complex<T> s1;
+			Complex<T> s2;
+
+			for (int i = (taylor_smooth % 2 == 0 ? taylor_smooth : taylor_smooth - 1); i >= 2; i -= 2)
 			{
-				d_alpha_smooth_d_zbar += (r1.pow(i) - r2.pow(i)) / i;
+				s1 += 1.0 / i;
+				s1 *= (r1 * r1);
+
+				s2 += 1.0 / i;
+				s2 *= (r2 * r2);
 			}
+			d_alpha_smooth_d_zbar += s1 - s2;
 			d_alpha_smooth_d_zbar *= 2;
 
-			if (taylor % 2 == 0)
+			if (taylor_smooth % 2 == 0)
 			{
-				d_alpha_smooth_d_zbar += r1.pow(taylor) * 2;
-				d_alpha_smooth_d_zbar -= r2.pow(taylor) * 2;
+				d_alpha_smooth_d_zbar += r1.pow(taylor_smooth) * 2;
+				d_alpha_smooth_d_zbar -= r2.pow(taylor_smooth) * 2;
 			}
 
 			d_alpha_smooth_d_zbar *= Complex<T>(0, -kappastar / PI);
@@ -293,7 +314,8 @@ we seek the values of z that make this equation equal to 0 for a given phi
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 \param phi -- value of the variable parametrizing z
 
 \return gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
@@ -301,11 +323,11 @@ we seek the values of z that make this equation equal to 0 for a given phi
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor, T phi)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, T phi)
 {
 	Complex<T> d_alpha_star_d_zbar = d_star_deflection_d_zbar(z, theta, stars, nstars);
-	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
-	Complex<T> d_alpha_smooth_d_zbar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor);
+	T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx);
+	Complex<T> d_alpha_smooth_d_zbar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_smooth / d_zbar)_bar
@@ -353,14 +375,15 @@ with respect to zbar^2
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 
 \return d2_alpha_smooth_d_zbar2
 ******************************************************************************/
 template <typename T>
-__device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor)
+__device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, int rectangular, Complex<T> corner, int approx, int taylor_smooth)
 {
-	T PI = 3.1415926535898;
+	T PI = static_cast<T>(3.1415926535898);
 	Complex<T> d2_alpha_smooth_d_zbar2;
 
 	if (rectangular)
@@ -370,16 +393,16 @@ __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, in
 			Complex<T> r1 = z.conj() / corner;
 			Complex<T> r2 = z.conj() / corner.conj();
 
-			for (int i = 2; i <= taylor; i += 2)
+			for (int i = 2; i <= taylor_smooth; i += 2)
 			{
 				d2_alpha_smooth_d_zbar2 += (r1.pow(i - 1) / corner - r2.pow(i - 1) / corner.conj());
 			}
 			d2_alpha_smooth_d_zbar2 *= 2;
 
-			if (taylor % 2 == 0)
+			if (taylor_smooth % 2 == 0)
 			{
-				d2_alpha_smooth_d_zbar2 += taylor / corner * r1.pow(taylor - 1) * 2;
-				d2_alpha_smooth_d_zbar2 -= taylor / corner.conj() * r2.pow(taylor - 1) * 2;
+				d2_alpha_smooth_d_zbar2 += taylor_smooth / corner * r1.pow(taylor_smooth - 1) * 2;
+				d2_alpha_smooth_d_zbar2 -= taylor_smooth / corner.conj() * r2.pow(taylor_smooth - 1) * 2;
 			}
 
 			d2_alpha_smooth_d_zbar2 *= Complex<T>(0, -kappastar / PI);
@@ -413,17 +436,18 @@ derivative of the parametric critical curve equation with respect to z
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 
 \return -2 * theta^2 * sum(m_i / (z - z_i)^3)
 		- (d^2alpha_smooth / dz_bar^2)_bar
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth)
 {
 	Complex<T> d2_alpha_star_d_zbar2 = d2_star_deflection_d_zbar2(z, theta, stars, nstars);
-	Complex<T> d2_alpha_smooth_d_zbar2 = d2_smooth_deflection_d_zbar2(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> d2_alpha_smooth_d_zbar2 = d2_smooth_deflection_d_zbar2(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	-(d2_alpha_star / d_zbar2)_bar - (d2_alpha_smooth / d_zbar2)_bar
@@ -448,7 +472,8 @@ root given the current approximation z and all other roots
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 \param phi -- value of the variable parametrizing z
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
@@ -457,23 +482,23 @@ root given the current approximation z and all other roots
 ******************************************************************************/
 template <typename T>
 __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor, T phi, Complex<T>* roots, int nroots)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, T phi, Complex<T>* roots, int nroots)
 {
-	Complex<T> f0 = parametric_critical_curve(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi);
-	Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> f0 = parametric_critical_curve(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor_smooth, phi);
+	T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx);
 
 	/******************************************************************************
 	if 1/mu < 10^-9, return same position
 	the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired
 	******************************************************************************/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < 0.000000001 &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs())) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z))) < 0.000000001 &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z))) < 0.000000001)
 	{
 		return z;
 	}
 
-	Complex<T> f1 = d_parametric_critical_curve_dz(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
+	Complex<T> f1 = d_parametric_critical_curve_dz(z, kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	contribution due to distance between root and stars
@@ -565,7 +590,8 @@ find new critical curve roots for a star field
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 \param roots -- pointer to array of roots
 \param nroots -- number of roots in array
 \param j -- position in the number of steps used for phi
@@ -577,7 +603,7 @@ find new critical curve roots for a star field
 ******************************************************************************/
 template <typename T>
 __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, Complex<T>* roots, int nroots, int j, int nphi, int nbranches, bool* fin)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -629,7 +655,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					******************************************************************************/
 
 					int center = (nphi / (2 * nbranches) + c * nphi / nbranches + c) * nroots;
-					result = find_critical_curve_root(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
+					result = find_critical_curve_root(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor_smooth, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 					/******************************************************************************
 					distance between old root and new root in units of theta_e
@@ -666,7 +692,8 @@ find maximum error in critical curve roots for a star field
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 \param j -- position in the number of steps used for phi
 \param nphi -- total number of steps used for phi in [0, 2*pi
 \param nbranches -- total number of branches for phi in [0, 2*pi]
@@ -675,7 +702,7 @@ find maximum error in critical curve roots for a star field
 ******************************************************************************/
 template <typename T>
 __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor, int j, int nphi, int nbranches, T* errs)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, int j, int nphi, int nbranches, T* errs)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -707,11 +734,11 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 				the value of 1/mu depends on the value of f0
 				this calculation ensures that the maximum possible value of 1/mu is given
 				******************************************************************************/
-				Complex<T> f0 = parametric_critical_curve(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor, phi0 + sgn * dphi);
-				Complex<T> d_alpha_smooth_d_z = d_smooth_deflection_d_z(z[center + sgn * j * nroots + a], kappastar, rectangular, corner, approx, taylor);
+				Complex<T> f0 = parametric_critical_curve(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor_smooth, phi0 + sgn * dphi);
+				T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z[center + sgn * j * nroots + a], kappastar, rectangular, corner, approx);
 
-				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z).abs()));
-				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z).abs()));
+				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z)));
+				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z)));
 
 				/******************************************************************************
 				return maximum possible error in 1/mu at root position
@@ -778,12 +805,13 @@ find caustics from critical curves for a star field
 \param corner -- complex number denoting the corner of the rectangular field of
 				 point mass lenses
 \param approx -- whether the smooth matter deflection is approximate or not
-\param taylor -- degree of the taylor series for alpha_smooth if approximate
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
 \param w -- pointer to array of caustic positions
 ******************************************************************************/
 template <typename T>
 __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, int nstars, T kappastar, 
-	int rectangular, Complex<T> corner, int approx, int taylor, Complex<T>* w)
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, Complex<T>* w)
 {
 	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
 	int x_stride = blockDim.x * gridDim.x;
@@ -793,7 +821,7 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 		/******************************************************************************
 		map image plane positions to source plane positions
 		******************************************************************************/
-		w[a] = complex_image_to_source(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor);
+		w[a] = complex_image_to_source(z[a], kappa, gamma, theta, stars, nstars, kappastar, rectangular, corner, approx, taylor_smooth);
 	}
 }
 
@@ -820,3 +848,40 @@ __global__ void transpose_array_kernel(Complex<T>* z1, int nrows, int ncols, Com
 	}
 }
 
+/******************************************************************************
+write array of values to disk
+
+\param vals -- pointer to array of values
+\param nrows -- number of rows in array
+\param ncols -- number of columns in array
+\param fname -- location of the file to write to
+
+\return bool -- true if file is successfully written, false if not
+******************************************************************************/
+template <typename T>
+bool write_array(T* vals, int nrows, int ncols, const std::string& fname)
+{
+	std::filesystem::path fpath = fname;
+
+	if (fpath.extension() != ".bin")
+	{
+		std::cerr << "Error. File " << fname << " is not a .bin file.\n";
+		return false;
+	}
+
+	std::ofstream outfile;
+
+	outfile.open(fname, std::ios_base::binary);
+
+	if (!outfile.is_open())
+	{
+		std::cerr << "Error. Failed to open file " << fname << "\n";
+		return false;
+	}
+	outfile.write((char*)(&nrows), sizeof(int));
+	outfile.write((char*)(&ncols), sizeof(int));
+	outfile.write((char*)vals, nrows * ncols * sizeof(T));
+	outfile.close();
+
+	return true;
+}

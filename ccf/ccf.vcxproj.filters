@@ -12,10 +12,7 @@
     <ClInclude Include="util.hpp">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="ccf_microlensing.cuh">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="ccf_read_write_files.cuh">
+    <ClInclude Include="ccf_functions.cuh">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="complex.cuh">
@@ -27,7 +24,10 @@
     <ClInclude Include="star.cuh">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="stopwatch.cuh">
+    <ClInclude Include="stopwatch.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="ccf.cuh">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

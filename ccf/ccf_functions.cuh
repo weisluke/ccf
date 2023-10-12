@@ -393,10 +393,19 @@ __device__ Complex<T> d2_smooth_deflection_d_zbar2(Complex<T> z, T kappastar, in
 			Complex<T> r1 = z.conj() / corner;
 			Complex<T> r2 = z.conj() / corner.conj();
 
-			for (int i = 2; i <= taylor_smooth; i += 2)
+			Complex<T> s1;
+			Complex<T> s2;
+
+			for (int i = (taylor_smooth % 2 == 0 ? taylor_smooth : taylor_smooth - 1); i >= 2; i -= 2)
 			{
-				d2_alpha_smooth_d_zbar2 += (r1.pow(i - 1) / corner - r2.pow(i - 1) / corner.conj());
+				s1 += 1;
+				s2 += 1;
+
+				s1 *= (r1 * r1);
+				s2 *= (r2 * r2);
 			}
+			d2_alpha_smooth_d_zbar2 += s1 - s2;
+			d2_alpha_smooth_d_zbar2 /= z.conj();
 			d2_alpha_smooth_d_zbar2 *= 2;
 
 			if (taylor_smooth % 2 == 0)

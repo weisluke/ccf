@@ -42,7 +42,6 @@ public:
 
 
 	const T PI = static_cast<T>(3.1415926535898);
-	const T E = static_cast<T>(2.718281828459);
 
 	/******************************************************************************
 	default variables
@@ -58,7 +57,6 @@ public:
 	T m_upper = static_cast<T>(50);
 	int rectangular = 1;
 	int approx = 1;
-	int taylor_smooth = 1;
 	int num_stars = 137;
 	std::string starfile = "";
 	int num_phi = 50;
@@ -82,6 +80,7 @@ public:
 
 	T mu_ave;
 	Complex<T> corner;
+	int taylor_smooth;
 
 	int num_roots;
 	T max_error;
@@ -361,11 +360,6 @@ private:
 		empirically, 30 seems to be roughly the amount needed
 		******************************************************************************/
 		int num_iters = 30;
-		
-		/******************************************************************************
-		set boolean (int) of errors having nan values to false (0)
-		******************************************************************************/
-		*has_nan = 0;
 
 		set_threads(threads, 32);
 		set_blocks(threads, blocks, num_roots, 2, num_branches);
@@ -396,6 +390,11 @@ private:
 		t_init_roots = stopwatch.stop();
 		std::cout << "\nDone finding roots. Elapsed time: " << t_elapsed << " seconds.\n";
 
+
+		/******************************************************************************
+		set boolean (int) of errors having nan values to false (0)
+		******************************************************************************/
+		*has_nan = 0;
 
 		/******************************************************************************
 		calculate errors in 1/mu for initial roots
@@ -447,6 +446,9 @@ private:
 		******************************************************************************/
 		int num_iters = 20;
 
+		set_threads(threads, 32);
+		set_blocks(threads, blocks, num_roots, 2, num_branches);
+
 		/******************************************************************************
 		begin finding critical curves and calculate time taken in seconds
 		******************************************************************************/
@@ -494,6 +496,11 @@ private:
 		t_ccs = stopwatch.stop();
 		std::cout << "\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n\n";
 
+
+		/******************************************************************************
+		set boolean (int) of errors having nan values to false (0)
+		******************************************************************************/
+		*has_nan = 0;
 
 		/******************************************************************************
 		find max error in 1/mu over whole critical curve array and print

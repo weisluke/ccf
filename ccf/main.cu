@@ -20,7 +20,7 @@ CCF<dtype> ccf;
 /******************************************************************************
 constants to be used
 ******************************************************************************/
-constexpr int OPTS_SIZE = 2 * 20;
+constexpr int OPTS_SIZE = 2 * 19;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -41,7 +41,6 @@ const std::string OPTS[OPTS_SIZE] =
 	"-np", "--num_phi",
 	"-nb", "--num_branches",
 	"-rs", "--random_seed",
-	"-ot", "--outfile_type",
 	"-o", "--outfile_prefix"
 };
 
@@ -108,8 +107,6 @@ void display_usage(char* name)
 		<< "                        range [0, 2*pi]. Default value: " << ccf.num_branches << "\n"
 		<< "  -rs,--random_seed     Specify the random seed for star field generation. A\n"
 		<< "                        value of 0 is reserved for star input files.\n"
-		<< "  -ot,--outfile_type    Specify the type of file to be output. Valid options\n"
-		<< "                        are binary (.bin). Default value: " << ccf.outfile_type << "\n"
 		<< "  -o,--outfile_prefix   Specify the prefix to be used in output filenames.\n"
 		<< "                        Default value: " << ccf.outfile_prefix << "\n";
 }
@@ -438,15 +435,6 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-ot") || argv[i] == std::string("--outfile_type"))
-		{
-			set_param("outfile_type", ccf.outfile_type, make_lowercase(cmdinput), verbose);
-			if (ccf.outfile_type != ".bin" && ccf.outfile_type != ".txt")
-			{
-				std::cerr << "Error. Invalid outfile_type. outfile_type must be .bin or .txt\n";
-				return -1;
-			}
-		}
 		else if (argv[i] == std::string("-o") || argv[i] == std::string("--outfile_prefix"))
 		{
 			set_param("outfile_prefix", ccf.outfile_prefix, cmdinput, verbose);
@@ -518,7 +506,7 @@ int main(int argc, char* argv[])
 
 
 	/******************************************************************************
-	run microlensing and save files
+	run and save files
 	******************************************************************************/
 	if (!ccf.run(verbose)) return -1;
 	if (!ccf.save(verbose)) return -1;

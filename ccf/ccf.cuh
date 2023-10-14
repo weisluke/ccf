@@ -23,27 +23,8 @@ class CCF
 {
 
 public:
-
 	/******************************************************************************
-	variables for kernel threads and blocks
-	******************************************************************************/
-	dim3 threads;
-	dim3 blocks;
-
-	/******************************************************************************
-	stopwatch for timing purposes
-	******************************************************************************/
-	Stopwatch stopwatch;
-	double t_elapsed;
-	double t_init_roots;
-	double t_ccs;
-	double t_caustics;
-
-
-	const T PI = static_cast<T>(3.1415926535898);
-
-	/******************************************************************************
-	default variables
+	default input variables
 	******************************************************************************/
 	T kappa_tot = static_cast<T>(0.3);
 	T shear = static_cast<T>(0.3);
@@ -61,8 +42,39 @@ public:
 	int num_phi = 50;
 	int num_branches = 1;
 	int random_seed = 0;
-	std::string outfile_type = ".bin";
 	std::string outfile_prefix = "./";
+
+
+	/******************************************************************************
+	class initializer is empty
+	******************************************************************************/
+	CCF()
+	{
+
+	}
+
+
+private:
+	/******************************************************************************
+	constant variables
+	******************************************************************************/
+	const T PI = static_cast<T>(3.1415926535898);
+	const std::string outfile_type = ".bin";
+
+	/******************************************************************************
+	variables for kernel threads and blocks
+	******************************************************************************/
+	dim3 threads;
+	dim3 blocks;
+
+	/******************************************************************************
+	stopwatch for timing purposes
+	******************************************************************************/
+	Stopwatch stopwatch;
+	double t_elapsed;
+	double t_init_roots;
+	double t_ccs;
+	double t_caustics;
 
 	/******************************************************************************
 	derived variables
@@ -97,13 +109,6 @@ public:
 	Complex<T>* caustics = nullptr;
 
 
-	CCF()
-	{
-
-	}
-
-
-private:
 
 	bool calculate_derived_params(bool verbose)
 	{

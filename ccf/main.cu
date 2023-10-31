@@ -206,6 +206,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-s") || argv[i] == std::string("--smooth_fraction"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			if (cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star"))
 			{
 				continue;
@@ -232,6 +236,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ks") || argv[i] == std::string("--kappa_star"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("kappa_star", ccf.kappa_star, std::stod(cmdinput), verbose);
@@ -249,6 +257,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-t") || argv[i] == std::string("--theta_e"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("theta_e", ccf.theta_e, std::stod(cmdinput), verbose);
@@ -266,6 +278,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-mf") || argv[i] == std::string("--mass_function"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			set_param("mass_function", ccf.mass_function_str, make_lowercase(cmdinput), verbose);
 			if (!massfunctions::MASS_FUNCTIONS.count(ccf.mass_function_str))
 			{
@@ -292,6 +308,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ml") || argv[i] == std::string("--m_lower"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("m_lower", ccf.m_lower, std::stod(cmdinput), verbose);
@@ -309,6 +329,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-mh") || argv[i] == std::string("--m_upper"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("m_upper", ccf.m_upper, std::stod(cmdinput), verbose);
@@ -331,6 +355,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-r") || argv[i] == std::string("--rectangular"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("rectangular", ccf.rectangular, std::stoi(cmdinput), verbose);
@@ -453,19 +481,17 @@ int main(int argc, char* argv[])
 
 	if (cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star"))
 	{
-		set_param("smooth_fraction", ccf.smooth_fraction, 1 - ccf.kappa_star / ccf.kappa_tot, verbose);
-	}
-	else
-	{
-		set_param("kappa_star", ccf.kappa_star, (1 - ccf.smooth_fraction) * ccf.kappa_tot, verbose);
+		if (cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star"))
+		{
+			set_param("smooth_fraction", ccf.smooth_fraction, 1 - ccf.kappa_star / ccf.kappa_tot, verbose);
+		}
+		else
+		{
+			set_param("kappa_star", ccf.kappa_star, (1 - ccf.smooth_fraction) * ccf.kappa_tot, verbose);
+		}
 	}
 
-	if (ccf.mass_function_str == "equal")
-	{
-		set_param("m_lower", ccf.m_lower, 1, verbose);
-		set_param("m_upper", ccf.m_upper, 1, verbose);
-	}
-	else if (ccf.m_lower > ccf.m_upper)
+	if (ccf.m_lower > ccf.m_upper)
 	{
 		std::cerr << "Error. m_lower must be <= m_upper.\n";
 		return -1;

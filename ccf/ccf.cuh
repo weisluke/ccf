@@ -348,6 +348,11 @@ private:
 			kappa_star_actual, m_lower_actual, m_upper_actual, mean_mass_actual, mean_mass2_actual);
 
 		set_param("kappa_star_actual", kappa_star_actual, kappa_star_actual, verbose);
+		set_param("m_lower_actual", m_lower_actual, m_lower_actual, verbose);
+		set_param("m_upper_actual", m_upper_actual, m_upper_actual, verbose);
+		set_param("mean_mass_actual", mean_mass_actual, mean_mass_actual, verbose);
+		set_param("mean_mass2_actual", mean_mass2_actual, mean_mass2_actual, verbose, true);
+
 		/******************************************************************************
 		END populating star array
 		******************************************************************************/

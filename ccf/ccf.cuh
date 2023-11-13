@@ -175,31 +175,30 @@ private:
 		{
 			if (rectangular)
 			{
-				set_param("corner", corner,
-					std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
+				corner = std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
 					* Complex<T>(
 						std::sqrt(std::abs((1 - kappa_tot - shear) / (1 - kappa_tot + shear))),
 						std::sqrt(std::abs((1 - kappa_tot + shear) / (1 - kappa_tot - shear)))
-					),
-					verbose);
+					);
+				set_param("corner", corner, corner, verbose);
 			}
 			else
 			{
-				set_param("corner", corner,
-					std::sqrt(theta_e * theta_e * num_stars * mean_mass / (kappa_star * 2 * ((1 - kappa_tot) * (1 - kappa_tot) + shear * shear)))
+				corner = std::sqrt(theta_e * theta_e * num_stars * mean_mass / (kappa_star * 2 * ((1 - kappa_tot) * (1 - kappa_tot) + shear * shear)))
 					* Complex<T>(
 						std::abs(1 - kappa_tot - shear),
 						std::abs(1 - kappa_tot + shear)
-					),
-					verbose);
+					);
+				set_param("corner", corner, corner, verbose);
 			}
 		}
 
-		set_param("taylor_smooth", taylor_smooth,
-			std::max(
-				static_cast<int>(std::log(2 * kappa_star * corner.abs() / (0.0000001 * theta_e * PI)) / std::log(1.1)),
-				1),
-			verbose && rectangular && approx);
+		T error = theta_e * 0.0000001;
+
+		taylor_smooth = std::max(
+			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (error * PI)) / std::log(1.1)),
+			1);
+		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose && rectangular && approx);
 
 		/******************************************************************************
 		number of roots to be found

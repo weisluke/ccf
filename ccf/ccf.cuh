@@ -5,7 +5,7 @@
 #include "mass_function.cuh"
 #include "star.cuh"
 #include "stopwatch.hpp"
-#include "util.hpp"
+#include "util.cuh"
 
 #include <curand_kernel.h>
 

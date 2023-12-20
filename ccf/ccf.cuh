@@ -109,6 +109,100 @@ private:
 
 
 
+	bool check_input_params(bool verbose)
+	{
+		std::cout << "Checking input parameters...\n";
+
+
+		if (kappa_tot < std::numeric_limits<T>::min())
+		{
+			std::cerr << "Error. kappa_tot must be >= " << std::numeric_limits<T>::min() << "\n";
+			return false;
+		}
+
+		if (kappa_star < std::numeric_limits<T>::min())
+		{
+			std::cerr << "Error. kappa_star must be >= " << std::numeric_limits<T>::min() << "\n";
+			return false;
+		}
+		if (kappa_star > kappa_tot)
+		{
+			std::cerr << "Error. kappa_star must be <= kappa_tot\n";
+			return false;
+		}
+
+		if (theta_e < std::numeric_limits<T>::min())
+		{
+			std::cerr << "Error. theta_e must be >= " << std::numeric_limits<T>::min() << "\n";
+			return false;
+		}
+
+		if (!massfunctions::MASS_FUNCTIONS.count(mass_function_str))
+		{
+			std::cerr << "Error. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
+			return false;
+		}
+
+		if (m_solar < std::numeric_limits<T>::min())
+		{
+			std::cerr << "Error. m_solar must be >= " << std::numeric_limits<T>::min() << "\n";
+			return false;
+		}
+
+		if (m_lower < std::numeric_limits<T>::min())
+		{
+			std::cerr << "Error. m_lower must be >= " << std::numeric_limits<T>::min() << "\n";
+			return false;
+		}
+
+		if (m_upper < m_lower)
+		{
+			std::cerr << "Error. m_upper must be >= m_lower.\n";
+			return false;
+		}
+
+		if (rectangular != 0 && rectangular != 1)
+		{
+			std::cerr << "Error. rectangular must be 1 (rectangular) or 0 (circular).\n";
+			return false;
+		}
+
+		if (approx != 0 && approx != 1)
+		{
+			std::cerr << "Error. approx must be 1 (approximate) or 0 (exact).\n";
+			return false;
+		}
+		
+		if (num_stars < 1)
+		{
+			std::cerr << "Error. num_stars must be an integer > 0\n";
+			return false;
+		}
+
+		if (num_phi < 1 || num_phi % 2 != 0)
+		{
+			std::cerr << "Error. num_phi must be an even integer > 0\n";
+			return false;
+		}
+
+		if (num_branches < 1)
+		{
+			std::cerr << "Error. num_branches must be an integer > 0\n";
+			return false;
+		}
+
+		if (num_phi % (2 * num_branches) != 0)
+		{
+			std::cerr << "Error. num_phi must be a multiple of 2 * num_branches\n";
+			return -1;
+		}
+
+
+		std::cout << "Done checking input parameters.\n\n";
+		
+		return true;
+	}
+	
 	bool calculate_derived_params(bool verbose)
 	{
 		std::cout << "Calculating derived parameters...\n";
@@ -704,6 +798,7 @@ public:
 
 	bool run(bool verbose)
 	{
+		if (!check_input_params(verbose)) return false;
 		if (!calculate_derived_params(verbose)) return false;
 		if (!allocate_initialize_memory(verbose)) return false;
 		if (!populate_star_array(verbose)) return false;

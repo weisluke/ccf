@@ -10,7 +10,6 @@ Email: weisluke@alum.mit.edu
 #include "util.cuh"
 
 #include <iostream>
-#include <limits> //for std::numeric_limits
 #include <string>
 
 
@@ -86,9 +85,9 @@ void display_usage(char* name)
 		<< "                        Kroupa. Default value: " << ccf.mass_function_str << "\n"
 		<< "  -ms,--m_solar         Specify the solar mass in arbitrary units.\n"
 		<< "                        Default value: " << ccf.m_solar << "\n"
-		<< "  -ml,--m_lower         Specify the lower mass cutoff in arbitrary units.\n"
+		<< "  -ml,--m_lower         Specify the lower mass cutoff in solar mass units.\n"
 		<< "                        Default value: " << ccf.m_lower << "\n"
-		<< "  -mh,--m_upper         Specify the upper mass cutoff in arbitrary units.\n"
+		<< "  -mh,--m_upper         Specify the upper mass cutoff in solar mass units.\n"
 		<< "                        Default value: " << ccf.m_upper << "\n"
 		<< "  -r,--rectangular      Specify whether the star field should be\n"
 		<< "                        rectangular (1) or circular (0). Default value: " << ccf.rectangular << "\n"
@@ -244,11 +243,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("kappa_star", ccf.kappa_star, std::stod(cmdinput), verbose);
-				if (ccf.kappa_star < std::numeric_limits<dtype>::min())
-				{
-					std::cerr << "Error. Invalid kappa_star input. kappa_star must be >= " << std::numeric_limits<dtype>::min() << "\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -265,11 +259,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("theta_e", ccf.theta_e, std::stod(cmdinput), verbose);
-				if (ccf.theta_e < std::numeric_limits<dtype>::min())
-				{
-					std::cerr << "Error. Invalid theta_e input. theta_e must be >= " << std::numeric_limits<dtype>::min() << "\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -284,22 +273,12 @@ int main(int argc, char* argv[])
 				continue;
 			}
 			set_param("mass_function", ccf.mass_function_str, make_lowercase(cmdinput), verbose);
-			if (!massfunctions::MASS_FUNCTIONS.count(ccf.mass_function_str))
-			{
-				std::cerr << "Error. Invalid mass_function input. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
-				return -1;
-			}
 		}
 		else if (argv[i] == std::string("-ms") || argv[i] == std::string("--m_solar"))
 		{
 			try
 			{
 				set_param("m_solar", ccf.m_solar, std::stod(cmdinput), verbose);
-				if (ccf.m_solar < std::numeric_limits<dtype>::min())
-				{
-					std::cerr << "Error. Invalid m_solar input. m_solar must be >= " << std::numeric_limits<dtype>::min() << "\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -316,11 +295,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("m_lower", ccf.m_lower, std::stod(cmdinput), verbose);
-				if (ccf.m_lower < std::numeric_limits<dtype>::min())
-				{
-					std::cerr << "Error. Invalid m_lower input. m_lower must be >= " << std::numeric_limits<dtype>::min() << "\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -337,16 +311,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("m_upper", ccf.m_upper, std::stod(cmdinput), verbose);
-				if (ccf.m_upper < std::numeric_limits<dtype>::min())
-				{
-					std::cerr << "Error. Invalid m_upper input. m_upper must be >= " << std::numeric_limits<dtype>::min() << "\n";
-					return -1;
-				}
-				else if (ccf.m_upper > std::numeric_limits<dtype>::max())
-				{
-					std::cerr << "Error. Invalid m_upper input. m_upper must be <= " << std::numeric_limits<dtype>::max() << "\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -363,11 +327,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("rectangular", ccf.rectangular, std::stoi(cmdinput), verbose);
-				if (ccf.rectangular != 0 && ccf.rectangular != 1)
-				{
-					std::cerr << "Error. Invalid rectangular input. rectangular must be 1 (rectangular) or 0 (circular).\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -380,11 +339,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("approx", ccf.approx, std::stoi(cmdinput), verbose);
-				if (ccf.approx != 0 && ccf.approx != 1)
-				{
-					std::cerr << "Error. Invalid approx input. approx must be 1 (approximate) or 0 (exact).\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -397,11 +351,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("num_stars", ccf.num_stars, std::stoi(cmdinput), verbose);
-				if (ccf.num_stars < 1)
-				{
-					std::cerr << "Error. Invalid num_stars input. num_stars must be an integer > 0\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -418,11 +367,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("num_phi", ccf.num_phi, std::stoi(cmdinput), verbose);
-				if (ccf.num_phi < 1 || ccf.num_phi % 2 != 0)
-				{
-					std::cerr << "Error. Invalid num_phi input. num_phi must be an even integer > 0\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -435,11 +379,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("num_branches", ccf.num_branches, std::stoi(cmdinput), verbose);
-				if (ccf.num_branches < 1)
-				{
-					std::cerr << "Error. Invalid num_branches input. num_branches must be an integer > 0\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -456,11 +395,6 @@ int main(int argc, char* argv[])
 			try
 			{
 				set_param("random_seed", ccf.random_seed, std::stoi(cmdinput), verbose);
-				if (ccf.random_seed == 0)
-				{
-					std::cerr << "Error. Invalid random_seed input. Seed of 0 is reserved for star input files.\n";
-					return -1;
-				}
 			}
 			catch (...)
 			{
@@ -474,22 +408,10 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (ccf.num_phi % (2 * ccf.num_branches) != 0)
-	{
-		std::cerr << "Error. Invalid num_phi input. num_phi must be a multiple of 2*num_branches\n";
-		return -1;
-	}
-
 	if (!(cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file")) &&
 		!(cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star")))
 	{
 		set_param("kappa_star", ccf.kappa_star, (1 - smooth_fraction) * ccf.kappa_tot, verbose);
-	}
-
-	if (ccf.m_lower > ccf.m_upper)
-	{
-		std::cerr << "Error. m_lower must be <= m_upper.\n";
-		return -1;
 	}
 
 	std::cout << "\n";

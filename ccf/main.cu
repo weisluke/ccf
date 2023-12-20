@@ -27,7 +27,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-v", "--verbose",
 	"-k", "--kappa_tot",
 	"-y", "--shear",
-	"-s", "--smooth_fraction",
+	"-s", "--smooth_fraction", //provided as a courtesy in this executable. not part of the ccf class
 	"-ks", "--kappa_star",
 	"-t", "--theta_e",
 	"-mf", "--mass_function",
@@ -48,6 +48,7 @@ const std::string OPTS[OPTS_SIZE] =
 default input option values
 ******************************************************************************/
 bool verbose = false;
+dtype smooth_fraction = static_cast<dtype>(1 - ccf.kappa_star / ccf.kappa_tot);
 
 
 
@@ -74,7 +75,7 @@ void display_usage(char* name)
 		<< "  -k,--kappa_tot        Specify the total convergence. Default value: " << ccf.kappa_tot << "\n"
 		<< "  -y,--shear            Specify the shear. Default value: " << ccf.shear << "\n"
 		<< "  -s,--smooth_fraction  Specify the fraction of convergence due to smoothly\n"
-		<< "                        distributed mass. Default value: " << ccf.smooth_fraction << "\n"
+		<< "                        distributed mass. Default value: " << smooth_fraction << "\n"
 		<< "  -ks,--kappa_star      Specify the convergence in point mass lenses. If\n"
 		<< "                        provided, this overrides any supplied value for the\n"
 		<< "                        smooth fraction. Default value: " << ccf.kappa_star << "\n"
@@ -216,13 +217,13 @@ int main(int argc, char* argv[])
 			}
 			try
 			{
-				set_param("smooth_fraction", ccf.smooth_fraction, std::stod(cmdinput), verbose);
-				if (ccf.smooth_fraction < 0)
+				set_param("smooth_fraction", smooth_fraction, std::stod(cmdinput), verbose);
+				if (smooth_fraction < 0)
 				{
 					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be >= 0\n";
 					return -1;
 				}
-				else if (ccf.smooth_fraction >= 1)
+				else if (smooth_fraction >= 1)
 				{
 					std::cerr << "Error. Invalid smooth_fraction input. smooth_fraction must be < 1\n";
 					return -1;
@@ -479,16 +480,10 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	if (!(cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file")))
+	if (!(cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file")) &&
+		!(cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star")))
 	{
-		if (cmd_option_exists(argv, argv + argc, "-ks") || cmd_option_exists(argv, argv + argc, "--kappa_star"))
-		{
-			set_param("smooth_fraction", ccf.smooth_fraction, 1 - ccf.kappa_star / ccf.kappa_tot, verbose);
-		}
-		else
-		{
-			set_param("kappa_star", ccf.kappa_star, (1 - ccf.smooth_fraction) * ccf.kappa_tot, verbose);
-		}
+		set_param("kappa_star", ccf.kappa_star, (1 - smooth_fraction) * ccf.kappa_tot, verbose);
 	}
 
 	if (ccf.m_lower > ccf.m_upper)

@@ -38,7 +38,7 @@ public:
 	int approx = 1;
 	int num_stars = 137;
 	std::string starfile = "";
-	int num_phi = 50;
+	int num_phi = 100;
 	int num_branches = 1;
 	int random_seed = 0;
 	std::string outfile_prefix = "./";

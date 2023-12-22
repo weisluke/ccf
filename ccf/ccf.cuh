@@ -695,7 +695,7 @@ private:
 			******************************************************************************/
 			print_progress(i, num_iters - 1);
 
-			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return false;
 		}
@@ -712,7 +712,7 @@ private:
 		calculate errors in 1/mu for initial roots
 		******************************************************************************/
 		print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
-		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, 0, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 
@@ -786,7 +786,7 @@ private:
 			******************************************************************************/
 			for (int i = 0; i < num_iters; i++)
 			{
-				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 					rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, j, num_phi, num_branches, fin);
 				if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return false;
 			}
@@ -821,7 +821,7 @@ private:
 
 		for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 		{
-			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, j, num_phi, num_branches, errs);
 			if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 		}
@@ -863,7 +863,7 @@ private:
 
 		std::cout << "Finding caustic positions...\n";
 		stopwatch.start();
-		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, caustics);
 		if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
 		t_caustics = stopwatch.stop();

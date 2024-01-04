@@ -69,3 +69,36 @@ __device__ Complex<T> d_alpha_local_d_zbar(Complex<T> z, T theta, TreeNode<T>* n
 	return d_a_local_bar_dz.conj();
 }
 
+/******************************************************************************
+calculate the second derivative of the deflection angle due to far away stars
+for a node with respect to zbar^2
+
+\param z -- complex image plane position
+\param theta -- size of the Einstein radius of a unit mass point lens
+\param node -- node within which to calculate the deflection angle
+
+\return d2_alpha_local_d_zbar2 = theta^2 
+ 		   * sum(i * (i-1) * (i - 2) * a_i * (z - z_0) ^ (i - 3))_bar
+		   where a_i are coefficients of the lensing potential in units of the
+		   node size
+******************************************************************************/
+template <typename T>
+__device__ Complex<T> d2_alpha_local_d_zbar2(Complex<T> z, T theta, TreeNode<T>* node)
+{
+	Complex<T> d2_a_local_bar_dz2;
+	Complex<T> dz = (z - node->center) / node->half_length;
+
+	for (int i = node->expansion_order; i >= 3; i--)
+	{
+		d2_a_local_bar_dz2 *= dz;
+		d2_a_local_bar_dz2 += node->local_coeffs[i] * i * (i - 1) * (i - 2);
+	}
+	d2_a_local_bar_dz2 *= (theta * theta);
+	/******************************************************************************
+	account for node size
+	******************************************************************************/
+	d2_a_local_bar_dz2 /= (node->half_length * node->half_length * node->half_length);
+
+	return d2_a_local_bar_dz2.conj();
+}
+

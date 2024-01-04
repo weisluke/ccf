@@ -1,5 +1,8 @@
 ﻿#pragma once
 
+#include "alpha_local.cuh"
+#include "alpha_smooth.cuh"
+#include "alpha_star.cuh"
 #include "complex.cuh"
 #include "star.cuh"
 #include "tree_node.cuh"

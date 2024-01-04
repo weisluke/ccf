@@ -1,10 +1,13 @@
 #pragma once
 
+#include "binomial_coefficients.cuh"
 #include "complex.cuh"
 #include "ccf_functions.cuh"
+#include "fmm.cuh"
 #include "mass_function.cuh"
 #include "star.cuh"
 #include "stopwatch.hpp"
+#include "tree_node.cuh"
 #include "util.cuh"
 
 #include <curand_kernel.h>
@@ -16,6 +19,7 @@
 #include <iostream>
 #include <limits> //for std::numeric_limits
 #include <string>
+#include <vector>
 
 
 template <typename T>
@@ -58,6 +62,7 @@ private:
 	constant variables
 	******************************************************************************/
 	const T PI = static_cast<T>(3.1415926535898);
+	const T E = static_cast<T>(2.718281828459);
 	const std::string outfile_type = ".bin";
 
 	/******************************************************************************
@@ -92,6 +97,15 @@ private:
 	Complex<T> corner;
 	int taylor_smooth;
 
+	T alpha_error; //error in the deflection angle
+
+	int expansion_order;
+
+	T root_half_length;
+	int tree_levels = 0;
+	std::vector<TreeNode<T>*> tree = {};
+	std::vector<int> num_nodes = {};
+
 	int num_roots;
 	T max_error;
 
@@ -100,6 +114,10 @@ private:
 	******************************************************************************/
 	curandState* states = nullptr;
 	star<T>* stars = nullptr;
+	star<T>* temp_stars = nullptr;
+
+	int* binomial_coeffs = nullptr;
+
 	Complex<T>* ccs_init = nullptr;
 	Complex<T>* ccs = nullptr;
 	bool* fin = nullptr;
@@ -286,13 +304,13 @@ private:
 			}
 		}
 
-		T error = theta_e * 0.0000001;
+		alpha_error = theta_e * 0.0000001; //error is 10^-7 einstein radii
 
 		taylor_smooth = std::max(
-			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (error * PI)) / std::log(1.1)),
+			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (alpha_error * PI)) / std::log(1.1)),
 			1);
 		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose && rectangular && approx);
-
+		
 		/******************************************************************************
 		number of roots to be found
 		******************************************************************************/
@@ -323,6 +341,14 @@ private:
 			cudaMallocManaged(&stars, num_stars * sizeof(star<T>));
 			if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return false;
 		}
+		cudaMallocManaged(&temp_stars, num_stars * sizeof(star<T>));
+		if (cuda_error("cudaMallocManaged(*temp_stars)", false, __FILE__, __LINE__)) return false;
+
+		/******************************************************************************
+		allocate memory for binomial coefficients
+		******************************************************************************/
+		cudaMallocManaged(&binomial_coeffs, (2 * treenode::MAX_EXPANSION_ORDER * (2 * treenode::MAX_EXPANSION_ORDER + 3) / 2 + 1) * sizeof(int));
+		if (cuda_error("cudaMallocManaged(*binomial_coeffs)", false, __FILE__, __LINE__)) return false;
 
 		/******************************************************************************
 		allocate memory for array of critical curve positions
@@ -477,6 +503,169 @@ private:
 		return true;
 	}
 
+	bool create_tree(bool verbose)
+	{
+		/******************************************************************************
+		BEGIN create root node, then create children and sort stars
+		******************************************************************************/
+
+		if (rectangular)
+		{
+			root_half_length = corner.re > corner.im ? corner.re : corner.im;
+		}
+		else
+		{
+			root_half_length = corner.abs();
+		}
+		/******************************************************************************
+		upscale root half length slightly to ensure it encompasses all stars
+		******************************************************************************/
+		set_param("root_half_length", root_half_length, 1.1 * root_half_length, verbose);
+
+		/******************************************************************************
+		push empty pointer into tree, add 1 to number of nodes, and allocate memory
+		******************************************************************************/
+		tree.push_back(nullptr);
+		num_nodes.push_back(1);
+		cudaMallocManaged(&tree.back(), num_nodes.back() * sizeof(TreeNode<T>));
+		if (cuda_error("cudaMallocManaged(*tree)", false, __FILE__, __LINE__)) return false;
+
+		/******************************************************************************
+		initialize root node
+		******************************************************************************/
+		tree[0][0] = TreeNode<T>(Complex<T>(0, 0), root_half_length, 0);
+		tree[0][0].numstars = num_stars;
+
+
+		int* max_num_stars_in_level;
+		int* min_num_stars_in_level;
+		int* num_nonempty_nodes;
+		cudaMallocManaged(&max_num_stars_in_level, sizeof(int));
+		if (cuda_error("cudaMallocManaged(*max_num_stars_in_level)", false, __FILE__, __LINE__)) return false;
+		cudaMallocManaged(&min_num_stars_in_level, sizeof(int));
+		if (cuda_error("cudaMallocManaged(*min_num_stars_in_level)", false, __FILE__, __LINE__)) return false;
+		cudaMallocManaged(&num_nonempty_nodes, sizeof(int));
+		if (cuda_error("cudaMallocManaged(*num_nonempty_nodes)", false, __FILE__, __LINE__)) return false;
+
+		std::cout << "Creating children and sorting stars...\n";
+		stopwatch.start();
+		set_threads(threads, 512);
+		do
+		{
+			print_verbose("\nProcessing level " + std::to_string(tree_levels) + "\n", verbose);
+
+			*max_num_stars_in_level = 0;
+			*min_num_stars_in_level = num_stars;
+			*num_nonempty_nodes = 0;
+
+			set_blocks(threads, blocks, num_nodes[tree_levels]);
+			treenode::get_node_star_info_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels],
+				num_nonempty_nodes, min_num_stars_in_level, max_num_stars_in_level);
+			if (cuda_error("get_node_star_info_kernel", true, __FILE__, __LINE__)) return false;
+
+			print_verbose("Maximum number of stars in a node and its neighbors is " + std::to_string(*max_num_stars_in_level) + "\n", verbose);
+			print_verbose("Minimum number of stars in a node and its neighbors is " + std::to_string(*min_num_stars_in_level) + "\n", verbose);
+
+			if (*max_num_stars_in_level > treenode::MAX_NUM_STARS_DIRECT)
+			{
+				print_verbose("Number of non-empty children: " + std::to_string(*num_nonempty_nodes * 4) + "\n", verbose);
+
+				print_verbose("Allocating memory for children...\n", verbose);
+				tree.push_back(nullptr);
+				num_nodes.push_back(*num_nonempty_nodes * 4);
+				cudaMallocManaged(&tree.back(), num_nodes.back() * sizeof(TreeNode<T>));
+				if (cuda_error("cudaMallocManaged(*tree)", false, __FILE__, __LINE__)) return false;
+
+				print_verbose("Creating children...\n", verbose);
+				(*num_nonempty_nodes)--; //subtract one since value is size of array, and instead needs to be the first allocatable element
+				set_blocks(threads, blocks, num_nodes[tree_levels]);
+				treenode::create_children_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels], num_nonempty_nodes, tree[tree_levels + 1]);
+				if (cuda_error("create_children_kernel", true, __FILE__, __LINE__)) return false;
+
+				print_verbose("Sorting stars...\n", verbose);
+				set_blocks(threads, blocks, 512 * num_nodes[tree_levels]);
+				treenode::sort_stars_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels], stars, temp_stars);
+				if (cuda_error("sort_stars_kernel", true, __FILE__, __LINE__)) return false;
+
+				tree_levels++;
+
+				print_verbose("Setting neighbors...\n", verbose);
+				set_blocks(threads, blocks, num_nodes[tree_levels]);
+				treenode::set_neighbors_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels]);
+				if (cuda_error("set_neighbors_kernel", true, __FILE__, __LINE__)) return false;
+			}
+		} while (*max_num_stars_in_level > treenode::MAX_NUM_STARS_DIRECT);
+		set_param("tree_levels", tree_levels, tree_levels, verbose);
+
+		t_elapsed = stopwatch.stop();
+		std::cout << "Done creating children and sorting stars. Elapsed time: " << t_elapsed << " seconds.\n\n";
+
+		/******************************************************************************
+		END create root node, then create children and sort stars
+		******************************************************************************/
+
+		expansion_order = static_cast<int>(2 * std::log2(theta_e) - std::log2(root_half_length * alpha_error))
+			 + tree_levels + 1;
+		set_param("expansion_order", expansion_order, expansion_order, verbose, true);
+		if (expansion_order < 3)
+		{
+			std::cerr << "Error. Expansion order needs to be >= 3\n";
+			return false;
+		}
+		else if (expansion_order > treenode::MAX_EXPANSION_ORDER)
+		{
+			std::cerr << "Error. Maximum allowed expansion order is " << treenode::MAX_EXPANSION_ORDER << "\n";
+			return false;
+		}
+
+		print_verbose("Calculating binomial coefficients...\n", verbose);
+		calculate_binomial_coeffs(binomial_coeffs, 2 * expansion_order);
+		print_verbose("Done calculating binomial coefficients.\n\n", verbose);
+
+
+		/******************************************************************************
+		BEGIN calculating multipole and local coefficients
+		******************************************************************************/
+
+		std::cout << "Calculating multipole and local coefficients...\n";
+		stopwatch.start();
+
+		set_threads(threads, 16, expansion_order + 1);
+		set_blocks(threads, blocks, num_nodes[tree_levels], (expansion_order + 1));
+		fmm::calculate_multipole_coeffs_kernel<T> <<<blocks, threads, 16 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[tree_levels], num_nodes[tree_levels], expansion_order, stars);
+
+		set_threads(threads, 4, expansion_order + 1, 4);
+		for (int i = tree_levels - 1; i >= 0; i--)
+		{
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), 4);
+			fmm::calculate_M2M_coeffs_kernel<T> <<<blocks, threads, 4 * 4 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+		}
+
+		/******************************************************************************
+		local coefficients are non zero only starting at the second level
+		******************************************************************************/
+		for (int i = 2; i <= tree_levels; i++)
+		{
+			set_threads(threads, 16, expansion_order + 1);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1));
+			fmm::calculate_L2L_coeffs_kernel<T> <<<blocks, threads, 16 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+
+			set_threads(threads, 1, expansion_order + 1, 27);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), 27);
+			fmm::calculate_M2L_coeffs_kernel<T> <<<blocks, threads, 1 * 27 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+		}
+		if (cuda_error("calculate_coeffs_kernels", true, __FILE__, __LINE__)) return false;
+
+		t_elapsed = stopwatch.stop();
+		std::cout << "Done calculating multipole and local coefficients. Elapsed time: " << t_elapsed << " seconds.\n\n";
+		
+		/******************************************************************************
+		END calculating multipole and local coefficients
+		******************************************************************************/
+
+		return true;
+	}
+
 	bool find_initial_roots(bool verbose)
 	{
 		/******************************************************************************
@@ -507,7 +696,7 @@ private:
 			******************************************************************************/
 			print_progress(i, num_iters - 1);
 
-			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return false;
 		}
@@ -524,7 +713,7 @@ private:
 		calculate errors in 1/mu for initial roots
 		******************************************************************************/
 		print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
-		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, 0, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 
@@ -598,7 +787,7 @@ private:
 			******************************************************************************/
 			for (int i = 0; i < num_iters; i++)
 			{
-				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 					rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, j, num_phi, num_branches, fin);
 				if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return false;
 			}
@@ -633,7 +822,7 @@ private:
 
 		for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 		{
-			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, j, num_phi, num_branches, errs);
 			if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 		}
@@ -675,7 +864,7 @@ private:
 
 		std::cout << "Finding caustic positions...\n";
 		stopwatch.start();
-		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, num_stars, kappa_star,
+		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, caustics);
 		if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
 		t_caustics = stopwatch.stop();
@@ -802,6 +991,7 @@ public:
 		if (!calculate_derived_params(verbose)) return false;
 		if (!allocate_initialize_memory(verbose)) return false;
 		if (!populate_star_array(verbose)) return false;
+		if (!create_tree(verbose)) return false;
 		if (!find_initial_roots(verbose)) return false;
 		if (!find_ccs_caustics(verbose)) return false;
 

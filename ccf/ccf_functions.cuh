@@ -39,12 +39,12 @@ __device__ Complex<T> complex_image_to_source(Complex<T> z, T kappa, T gamma, T 
 {
 	Complex<T> a_star = alpha_star<T>(z, theta, stars, node);
 	Complex<T> a_local = alpha_local<T>(z, theta, node);
-	Complex<T> alpha_smooth = smooth_deflection<T>(z, kappastar, rectangular, corner, approx, taylor_smooth);
+	Complex<T> a_smooth = alpha_smooth<T>(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	(1 - kappa) * z + gamma * z_bar - alpha_star - alpha_local - alpha_smooth
 	******************************************************************************/
-	return (1 - kappa) * z + gamma * z.conj() - a_star - a_local - alpha_smooth;
+	return (1 - kappa) * z + gamma * z.conj() - a_star - a_local - a_smooth;
 }
 
 /******************************************************************************
@@ -75,8 +75,8 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 {
 	Complex<T> d_a_star_d_zbar = d_alpha_star_d_zbar(z, theta, stars, node);
 	Complex<T> d_a_local_d_zbar = d_alpha_local_d_zbar(z, theta, node);
-	T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx);
-	Complex<T> d_alpha_smooth_d_zbar = d_smooth_deflection_d_zbar(z, kappastar, rectangular, corner, approx, taylor_smooth);
+	T d_a_smooth_d_z = d_alpha_smooth_d_z(z, kappastar, rectangular, corner, approx);
+	Complex<T> d_a_smooth_d_zbar = d_alpha_smooth_d_zbar(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	gamma - (d_alpha_star / d_zbar)_bar - (d_alpha_local / d_zbar)_bar
@@ -84,8 +84,8 @@ __device__ Complex<T> parametric_critical_curve(Complex<T> z, T kappa, T gamma, 
 	- (1 - kappa - d_alpha_smooth / d_z) * e^(-i * phi)
 	******************************************************************************/
 	return gamma - d_a_star_d_zbar.conj() - d_a_local_d_zbar.conj()
-		- d_alpha_smooth_d_zbar.conj()
-		- (1 - kappa - d_alpha_smooth_d_z) * Complex<T>(cos(phi), -sin(phi));
+		- d_a_smooth_d_zbar.conj()
+		- (1 - kappa - d_a_smooth_d_z) * Complex<T>(cos(phi), -sin(phi));
 }
 
 /******************************************************************************
@@ -114,13 +114,13 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 {
 	Complex<T> d2_a_star_d_zbar2 = d2_alpha_star_d_zbar2(z, theta, stars, node);
 	Complex<T> d2_a_local_d_zbar2 = d2_alpha_local_d_zbar2(z, theta, node);
-	Complex<T> d2_alpha_smooth_d_zbar2 = d2_smooth_deflection_d_zbar2(z, kappastar, rectangular, corner, approx, taylor_smooth);
+	Complex<T> d2_a_smooth_d_zbar2 = d2_alpha_smooth_d_zbar2(z, kappastar, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
 	-(d2_alpha_star / d_zbar2)_bar - (d2_alpha_local / d_zbar2)_bar
 	- (d2_alpha_smooth / d_zbar2)_bar
 	******************************************************************************/
-	return -d2_a_star_d_zbar2.conj() - d2_a_local_d_zbar2.conj() - d2_alpha_smooth_d_zbar2.conj();
+	return -d2_a_star_d_zbar2.conj() - d2_a_local_d_zbar2.conj() - d2_a_smooth_d_zbar2.conj();
 }
 
 /******************************************************************************
@@ -155,15 +155,15 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	TreeNode<T>* node = treenode::get_nearest_node(z, root);
 
 	Complex<T> f0 = parametric_critical_curve(z, kappa, gamma, theta, stars, kappastar, node, rectangular, corner, approx, taylor_smooth, phi);
-	T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z, kappastar, rectangular, corner, approx);
+	T d_a_smooth_d_z = d_alpha_smooth_d_z(z, kappastar, rectangular, corner, approx);
 
 	/******************************************************************************
 	if 1/mu < 10^-9, return same position
 	the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired
 	******************************************************************************/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z))) < 0.000000001 &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z))) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_a_smooth_d_z))) < 0.000000001 &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_a_smooth_d_z))) < 0.000000001)
 	{
 		return z;
 	}
@@ -408,10 +408,10 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 				this calculation ensures that the maximum possible value of 1/mu is given
 				******************************************************************************/
 				Complex<T> f0 = parametric_critical_curve(z[center + sgn * j * nroots + a], kappa, gamma, theta, stars, kappastar, node, rectangular, corner, approx, taylor_smooth, phi0 + sgn * dphi);
-				T d_alpha_smooth_d_z = d_smooth_deflection_d_z(z[center + sgn * j * nroots + a], kappastar, rectangular, corner, approx);
+				T d_a_smooth_d_z = d_alpha_smooth_d_z(z[center + sgn * j * nroots + a], kappastar, rectangular, corner, approx);
 
-				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_alpha_smooth_d_z)));
-				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_alpha_smooth_d_z)));
+				T e1 = fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_a_smooth_d_z)));
+				T e2 = fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_a_smooth_d_z)));
 
 				/******************************************************************************
 				return maximum possible error in 1/mu at root position

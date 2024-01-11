@@ -30,6 +30,24 @@
     <ClInclude Include="ccf.cuh">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="alpha_local.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="alpha_smooth.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="alpha_star.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="binomial_coefficients.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="fmm.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="tree_node.cuh">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu">

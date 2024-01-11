@@ -11,10 +11,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="alpha_local.cuh" />
+    <ClInclude Include="alpha_smooth.cuh" />
+    <ClInclude Include="alpha_star.cuh" />
+    <ClInclude Include="binomial_coefficients.cuh" />
     <ClInclude Include="ccf.cuh" />
     <ClInclude Include="ccf_functions.cuh" />
     <ClInclude Include="complex.cuh" />
+    <ClInclude Include="fmm.cuh" />
     <ClInclude Include="stopwatch.hpp" />
+    <ClInclude Include="tree_node.cuh" />
     <ClInclude Include="util.cuh" />
     <ClInclude Include="mass_function.cuh" />
     <ClInclude Include="star.cuh" />

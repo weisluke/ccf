@@ -674,7 +674,7 @@ private:
 		******************************************************************************/
 		int num_iters = 30;
 
-		set_threads(threads, 32);
+		set_threads(threads, 256);
 		set_blocks(threads, blocks, num_roots, 2, num_branches);
 
 		/******************************************************************************
@@ -759,7 +759,7 @@ private:
 		******************************************************************************/
 		int num_iters = 20;
 
-		set_threads(threads, 32);
+		set_threads(threads, 256);
 		set_blocks(threads, blocks, num_roots, 2, num_branches);
 
 		/******************************************************************************

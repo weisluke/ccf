@@ -255,7 +255,7 @@ private:
 		if (num_phi % (2 * num_branches) != 0)
 		{
 			std::cerr << "Error. num_phi must be a multiple of 2 * num_branches\n";
-			return -1;
+			return false;
 		}
 
 

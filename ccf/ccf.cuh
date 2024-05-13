@@ -4,7 +4,11 @@
 #include "complex.cuh"
 #include "ccf_functions.cuh"
 #include "fmm.cuh"
-#include "mass_function.cuh"
+#include "mass_functions.cuh"
+#include "mass_functions/equal.cuh"
+#include "mass_functions/kroupa.cuh"
+#include "mass_functions/salpeter.cuh"
+#include "mass_functions/uniform.cuh"
 #include "star.cuh"
 #include "stopwatch.hpp"
 #include "tree_node.cuh"
@@ -18,6 +22,7 @@
 #include <fstream> //for writing files
 #include <iostream>
 #include <limits> //for std::numeric_limits
+#include <memory> //for std::shared_ptr
 #include <string>
 #include <vector>
 
@@ -38,8 +43,8 @@ public:
 	T m_solar = static_cast<T>(1);
 	T m_lower = static_cast<T>(0.01);
 	T m_upper = static_cast<T>(50);
-	int rectangular = 1;
-	int approx = 1;
+	int rectangular = 1; //whether star field is rectangular or circular
+	int approx = 1; //whether terms for alpha_smooth are exact or approximate
 	int num_stars = 137;
 	std::string starfile = "";
 	int num_phi = 100;
@@ -84,15 +89,17 @@ private:
 	/******************************************************************************
 	derived variables
 	******************************************************************************/
-	massfunctions::massfunction mass_function;
+	std::shared_ptr<massfunctions::MassFunction<T>> mass_function;
 	T mean_mass;
 	T mean_mass2;
+	T mean_mass2_ln_mass;
 
 	T kappa_star_actual;
 	T m_lower_actual;
 	T m_upper_actual;
 	T mean_mass_actual;
 	T mean_mass2_actual;
+	T mean_mass2_ln_mass_actual;
 
 	T mu_ave;
 	Complex<T> corner;
@@ -186,43 +193,43 @@ private:
 			std::cerr << "Error. kappa_star must be >= " << std::numeric_limits<T>::min() << "\n";
 			return false;
 		}
-		if (kappa_star > kappa_tot)
+		if (starfile == "" && kappa_star > kappa_tot)
 		{
 			std::cerr << "Error. kappa_star must be <= kappa_tot\n";
 			return false;
 		}
 
-		if (theta_e < std::numeric_limits<T>::min())
+		if (starfile == "" && theta_e < std::numeric_limits<T>::min())
 		{
 			std::cerr << "Error. theta_e must be >= " << std::numeric_limits<T>::min() << "\n";
 			return false;
 		}
 
-		if (!massfunctions::MASS_FUNCTIONS.count(mass_function_str))
+		if (starfile == "" && !massfunctions::MASS_FUNCTIONS<T>.count(mass_function_str))
 		{
 			std::cerr << "Error. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
 			return false;
 		}
 
-		if (m_solar < std::numeric_limits<T>::min())
+		if (starfile == "" && m_solar < std::numeric_limits<T>::min())
 		{
 			std::cerr << "Error. m_solar must be >= " << std::numeric_limits<T>::min() << "\n";
 			return false;
 		}
 
-		if (m_lower < std::numeric_limits<T>::min())
+		if (starfile == "" && m_lower < std::numeric_limits<T>::min())
 		{
 			std::cerr << "Error. m_lower must be >= " << std::numeric_limits<T>::min() << "\n";
 			return false;
 		}
 
-		if (m_upper < m_lower)
+		if (starfile == "" && m_upper < m_lower)
 		{
 			std::cerr << "Error. m_upper must be >= m_lower.\n";
 			return false;
 		}
 
-		if (rectangular != 0 && rectangular != 1)
+		if (starfile == "" && rectangular != 0 && rectangular != 1)
 		{
 			std::cerr << "Error. rectangular must be 1 (rectangular) or 0 (circular).\n";
 			return false;
@@ -280,13 +287,19 @@ private:
 				set_param("m_lower", m_lower, 1, verbose);
 				set_param("m_upper", m_upper, 1, verbose);
 			}
+			else
+			{
+				set_param("m_lower", m_lower, m_lower * m_solar, verbose);
+				set_param("m_upper", m_upper, m_upper * m_solar, verbose);
+			}
 
 			/******************************************************************************
-			determine mass function, <m>, and <m^2>
+			determine mass function, <m>, <m^2>, and <m^2 * ln(m)>
 			******************************************************************************/
-			mass_function = massfunctions::MASS_FUNCTIONS.at(mass_function_str);
-			set_param("mean_mass", mean_mass, MassFunction<T>(mass_function).mean_mass(m_solar, m_lower, m_upper), verbose);
-			set_param("mean_mass2", mean_mass2, MassFunction<T>(mass_function).mean_mass2(m_solar, m_lower, m_upper), verbose);
+			mass_function = massfunctions::MASS_FUNCTIONS<T>.at(mass_function_str);
+			set_param("mean_mass", mean_mass, mass_function->mean_mass(m_lower, m_upper, m_solar), verbose);
+			set_param("mean_mass2", mean_mass2, mass_function->mean_mass2(m_lower, m_upper, m_solar), verbose);
+			set_param("mean_mass2_ln_mass", mean_mass2_ln_mass, mass_function->mean_mass2_ln_mass(m_lower, m_upper, m_solar), verbose);
 		}
 		/******************************************************************************
 		if star file is specified, check validity of values and set num_stars,
@@ -297,8 +310,8 @@ private:
 		{
 			std::cout << "Calculating some parameter values based on star input file " << starfile << "\n";
 
-			if (!read_star_file<T>(num_stars, rectangular, corner, theta_e, stars,
-				kappa_star, m_lower, m_upper, mean_mass, mean_mass2, starfile))
+			if (!read_star_file<T>(num_stars, rectangular, corner, theta_star, stars,
+				kappa_star, m_lower, m_upper, mean_mass, mean_mass2, mean_mass2_ln_mass, starfile))
 			{
 				std::cerr << "Error. Unable to read star field parameters from file " << starfile << "\n";
 				return false;
@@ -309,10 +322,16 @@ private:
 			set_param("corner", corner, corner, verbose);
 			set_param("theta_e", theta_e, theta_e, verbose);
 			set_param("kappa_star", kappa_star, kappa_star, verbose);
+			if (kappa_star > kappa_tot)
+			{
+				std::cerr << "Error. kappa_star must be <= kappa_tot\n";
+				return false;
+			}
 			set_param("m_lower", m_lower, m_lower, verbose);
 			set_param("m_upper", m_upper, m_upper, verbose);
 			set_param("mean_mass", mean_mass, mean_mass, verbose);
 			set_param("mean_mass2", mean_mass2, mean_mass2, verbose);
+			set_param("mean_mass2_ln_mass", mean_mass2_ln_mass, mean_mass2_ln_mass, verbose);
 
 			std::cout << "Done calculating some parameter values based on star input file " << starfile << "\n";
 		}
@@ -327,22 +346,18 @@ private:
 		******************************************************************************/
 		if (starfile == "")
 		{
+			corner = Complex<T>(1 / std::abs(1 - kappa_tot + shear), 1 / std::abs(1 - kappa_tot - shear));
+
 			if (rectangular)
 			{
-				corner = std::sqrt(PI * theta_e * theta_e * num_stars * mean_mass / (4 * kappa_star))
-					* Complex<T>(
-						std::sqrt(std::abs((1 - kappa_tot - shear) / (1 - kappa_tot + shear))),
-						std::sqrt(std::abs((1 - kappa_tot + shear) / (1 - kappa_tot - shear)))
-					);
+				corner = Complex<T>(std::sqrt(corner.re / corner.im), std::sqrt(corner.im / corner.re));
+				corner *= std::sqrt(PI * theta_star * theta_star * num_stars * mean_mass / (4 * kappa_star));
 				set_param("corner", corner, corner, verbose);
 			}
 			else
 			{
-				corner = std::sqrt(theta_e * theta_e * num_stars * mean_mass / (kappa_star * 2 * ((1 - kappa_tot) * (1 - kappa_tot) + shear * shear)))
-					* Complex<T>(
-						std::abs(1 - kappa_tot - shear),
-						std::abs(1 - kappa_tot + shear)
-					);
+				corner = corner / corner.abs();
+				corner *= std::sqrt(theta_star * theta_star * num_stars * mean_mass / kappa_star);
 				set_param("corner", corner, corner, verbose);
 			}
 		}
@@ -487,7 +502,32 @@ private:
 			******************************************************************************/
 			initialize_curand_states_kernel<T> <<<blocks, threads>>> (states, num_stars, random_seed);
 			if (cuda_error("initialize_curand_states_kernel", true, __FILE__, __LINE__)) return false;
-			generate_star_field_kernel<T> <<<blocks, threads>>> (states, stars, num_stars, rectangular, corner, mass_function, m_solar, m_lower, m_upper);
+
+			/******************************************************************************
+			mass function must be a template for the kernel due to polymorphism
+			we therefore must check all possible options
+			******************************************************************************/
+			if (mass_function_str == "equal")
+			{
+				generate_star_field_kernel<T, massfunctions::Equal<T>> <<<blocks, threads>>> (states, stars, num_stars, rectangular, corner, m_lower, m_upper, m_solar);
+			}
+			else if (mass_function_str == "uniform")
+			{
+				generate_star_field_kernel<T, massfunctions::Uniform<T>> <<<blocks, threads>>> (states, stars, num_stars, rectangular, corner, m_lower, m_upper, m_solar);
+			}
+			else if (mass_function_str == "salpeter")
+			{
+				generate_star_field_kernel<T, massfunctions::Salpeter<T>> <<<blocks, threads>>> (states, stars, num_stars, rectangular, corner, m_lower, m_upper, m_solar);
+			}
+			else if (mass_function_str == "kroupa")
+			{
+				generate_star_field_kernel<T, massfunctions::Kroupa<T>> <<<blocks, threads>>> (states, stars, num_stars, rectangular, corner, m_lower, m_upper, m_solar);
+			}
+			else
+			{
+				std::cerr << "Error. mass_function must be equal, uniform, Salpeter, or Kroupa.\n";
+				return false;
+			}
 			if (cuda_error("generate_star_field_kernel", true, __FILE__, __LINE__)) return false;
 
 			t_elapsed = stopwatch.stop();
@@ -503,16 +543,17 @@ private:
 
 		/******************************************************************************
 		calculate kappa_star_actual, m_lower_actual, m_upper_actual, mean_mass_actual,
-		and mean_mass2_actual based on star information
+		mean_mass2_actual, and mean_mass2_ln_mass_actual based on star information
 		******************************************************************************/
-		calculate_star_params<T>(num_stars, rectangular, corner, theta_e, stars,
-			kappa_star_actual, m_lower_actual, m_upper_actual, mean_mass_actual, mean_mass2_actual);
+		calculate_star_params<T>(num_stars, rectangular, corner, theta_star, stars,
+			kappa_star_actual, m_lower_actual, m_upper_actual, mean_mass_actual, mean_mass2_actual, mean_mass2_ln_mass_actual);
 
 		set_param("kappa_star_actual", kappa_star_actual, kappa_star_actual, verbose);
 		set_param("m_lower_actual", m_lower_actual, m_lower_actual, verbose);
 		set_param("m_upper_actual", m_upper_actual, m_upper_actual, verbose);
 		set_param("mean_mass_actual", mean_mass_actual, mean_mass_actual, verbose);
-		set_param("mean_mass2_actual", mean_mass2_actual, mean_mass2_actual, verbose, true);
+		set_param("mean_mass2_actual", mean_mass2_actual, mean_mass2_actual, verbose);
+		set_param("mean_mass2_ln_mass_actual", mean_mass2_ln_mass_actual, mean_mass2_ln_mass_actual, verbose, true);
 
 		/******************************************************************************
 		END populating star array
@@ -560,10 +601,7 @@ private:
 		{
 			root_half_length = corner.abs();
 		}
-		/******************************************************************************
-		upscale root half length slightly to ensure it encompasses all stars
-		******************************************************************************/
-		set_param("root_half_length", root_half_length, 1.1 * root_half_length, verbose);
+		set_param("root_half_length", root_half_length, root_half_length * 1.1, verbose); //slight buffer for containing all the stars
 
 		/******************************************************************************
 		push empty pointer into tree, add 1 to number of nodes, and allocate memory
@@ -592,7 +630,7 @@ private:
 
 		std::cout << "Creating children and sorting stars...\n";
 		stopwatch.start();
-		set_threads(threads, 512);
+
 		do
 		{
 			print_verbose("\nProcessing level " + std::to_string(tree_levels) + "\n", verbose);
@@ -601,6 +639,7 @@ private:
 			*min_num_stars_in_level = num_stars;
 			*num_nonempty_nodes = 0;
 
+			set_threads(threads, 512);
 			set_blocks(threads, blocks, num_nodes[tree_levels]);
 			treenode::get_node_star_info_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels],
 				num_nonempty_nodes, min_num_stars_in_level, max_num_stars_in_level);
@@ -611,28 +650,31 @@ private:
 
 			if (*max_num_stars_in_level > treenode::MAX_NUM_STARS_DIRECT)
 			{
-				print_verbose("Number of non-empty children: " + std::to_string(*num_nonempty_nodes * 4) + "\n", verbose);
+				print_verbose("Number of non-empty children: " + std::to_string(*num_nonempty_nodes * treenode::MAX_NUM_CHILDREN) + "\n", verbose);
 
 				print_verbose("Allocating memory for children...\n", verbose);
 				tree.push_back(nullptr);
-				num_nodes.push_back(*num_nonempty_nodes * 4);
+				num_nodes.push_back(*num_nonempty_nodes * treenode::MAX_NUM_CHILDREN);
 				cudaMallocManaged(&tree.back(), num_nodes.back() * sizeof(TreeNode<T>));
 				if (cuda_error("cudaMallocManaged(*tree)", false, __FILE__, __LINE__)) return false;
 
 				print_verbose("Creating children...\n", verbose);
 				(*num_nonempty_nodes)--; //subtract one since value is size of array, and instead needs to be the first allocatable element
+				set_threads(threads, 512);
 				set_blocks(threads, blocks, num_nodes[tree_levels]);
 				treenode::create_children_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels], num_nonempty_nodes, tree[tree_levels + 1]);
 				if (cuda_error("create_children_kernel", true, __FILE__, __LINE__)) return false;
 
 				print_verbose("Sorting stars...\n", verbose);
-				set_blocks(threads, blocks, 512 * num_nodes[tree_levels]);
-				treenode::sort_stars_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels], stars, temp_stars);
+				set_threads(threads, static_cast<int>(512 / *max_num_stars_in_level) + 1, std::min(512, *max_num_stars_in_level));
+				set_blocks(threads, blocks, num_nodes[tree_levels], std::min(512, *max_num_stars_in_level));
+				treenode::sort_stars_kernel<T> <<<blocks, threads, (threads.x + threads.x + threads.x * treenode::MAX_NUM_CHILDREN) * sizeof(int)>>> (tree[tree_levels], num_nodes[tree_levels], stars, temp_stars);
 				if (cuda_error("sort_stars_kernel", true, __FILE__, __LINE__)) return false;
 
 				tree_levels++;
 
 				print_verbose("Setting neighbors...\n", verbose);
+				set_threads(threads, 512);
 				set_blocks(threads, blocks, num_nodes[tree_levels]);
 				treenode::set_neighbors_kernel<T> <<<blocks, threads>>> (tree[tree_levels], num_nodes[tree_levels]);
 				if (cuda_error("set_neighbors_kernel", true, __FILE__, __LINE__)) return false;
@@ -647,8 +689,8 @@ private:
 		END create root node, then create children and sort stars
 		******************************************************************************/
 
-		expansion_order = static_cast<int>(2 * std::log2(theta_e) - std::log2(root_half_length * alpha_error))
-			 + tree_levels + 1;
+		expansion_order = static_cast<int>(2 * std::log2(theta_star) - std::log2(root_half_length * alpha_error))
+			+ tree_levels + 1;
 		set_param("expansion_order", expansion_order, expansion_order, verbose, true);
 		if (expansion_order < 3)
 		{
@@ -673,15 +715,15 @@ private:
 		std::cout << "Calculating multipole and local coefficients...\n";
 		stopwatch.start();
 
-		set_threads(threads, 16, expansion_order + 1);
-		set_blocks(threads, blocks, num_nodes[tree_levels], (expansion_order + 1));
-		fmm::calculate_multipole_coeffs_kernel<T> <<<blocks, threads, 16 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[tree_levels], num_nodes[tree_levels], expansion_order, stars);
-
-		set_threads(threads, 4, expansion_order + 1, 4);
-		for (int i = tree_levels - 1; i >= 0; i--)
+		for (int i = tree_levels; i >= 0; i--)
 		{
-			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), 4);
-			fmm::calculate_M2M_coeffs_kernel<T> <<<blocks, threads, 4 * 4 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+			set_threads(threads, 16, expansion_order + 1);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1));
+			fmm::calculate_multipole_coeffs_kernel<T> <<<blocks, threads, 16 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, stars);
+
+			set_threads(threads, 4, expansion_order + 1, treenode::MAX_NUM_CHILDREN);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), treenode::MAX_NUM_CHILDREN);
+			fmm::calculate_M2M_coeffs_kernel<T> <<<blocks, threads, 4 * treenode::MAX_NUM_CHILDREN * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
 		}
 
 		/******************************************************************************
@@ -693,15 +735,19 @@ private:
 			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1));
 			fmm::calculate_L2L_coeffs_kernel<T> <<<blocks, threads, 16 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
 
-			set_threads(threads, 1, expansion_order + 1, 27);
-			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), 27);
-			fmm::calculate_M2L_coeffs_kernel<T> <<<blocks, threads, 1 * 27 * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+			set_threads(threads, 1, expansion_order + 1, treenode::MAX_NUM_SAME_LEVEL_INTERACTION_LIST);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), treenode::MAX_NUM_SAME_LEVEL_INTERACTION_LIST);
+			fmm::calculate_M2L_coeffs_kernel<T> <<<blocks, threads, 1 * treenode::MAX_NUM_SAME_LEVEL_INTERACTION_LIST * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs);
+
+			set_threads(threads, 4, expansion_order + 1, treenode::MAX_NUM_DIFFERENT_LEVEL_INTERACTION_LIST);
+			set_blocks(threads, blocks, num_nodes[i], (expansion_order + 1), treenode::MAX_NUM_DIFFERENT_LEVEL_INTERACTION_LIST);
+			fmm::calculate_P2L_coeffs_kernel<T> <<<blocks, threads, 4 * treenode::MAX_NUM_DIFFERENT_LEVEL_INTERACTION_LIST * (expansion_order + 1) * sizeof(Complex<T>)>>> (tree[i], num_nodes[i], expansion_order, binomial_coeffs, stars);
 		}
 		if (cuda_error("calculate_coeffs_kernels", true, __FILE__, __LINE__)) return false;
 
 		t_elapsed = stopwatch.stop();
 		std::cout << "Done calculating multipole and local coefficients. Elapsed time: " << t_elapsed << " seconds.\n\n";
-		
+
 		/******************************************************************************
 		END calculating multipole and local coefficients
 		******************************************************************************/
@@ -957,11 +1003,13 @@ private:
 			outfile << "m_upper " << m_upper << "\n";
 			outfile << "mean_mass " << mean_mass << "\n";
 			outfile << "mean_mass2 " << mean_mass2 << "\n";
+			outfile << "mean_mass2_ln_mass " << mean_mass2_ln_mass << "\n";
 		}
 		outfile << "m_lower_actual " << m_lower_actual << "\n";
 		outfile << "m_upper_actual " << m_upper_actual << "\n";
 		outfile << "mean_mass_actual " << mean_mass_actual << "\n";
 		outfile << "mean_mass2_actual " << mean_mass2_actual << "\n";
+		outfile << "mean_mass2_ln_mass_actual " << mean_mass2_ln_mass_actual << "\n";
 		outfile << "num_stars " << num_stars << "\n";
 		if (rectangular)
 		{

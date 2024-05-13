@@ -38,7 +38,7 @@ public:
 	T kappa_tot = static_cast<T>(0.3);
 	T shear = static_cast<T>(0.3);
 	T kappa_star = static_cast<T>(0.27);
-	T theta_e = static_cast<T>(1);
+	T theta_star = static_cast<T>(1);
 	std::string mass_function_str = "equal";
 	T m_solar = static_cast<T>(1);
 	T m_lower = static_cast<T>(0.01);
@@ -199,9 +199,9 @@ private:
 			return false;
 		}
 
-		if (starfile == "" && theta_e < std::numeric_limits<T>::min())
+		if (starfile == "" && theta_star < std::numeric_limits<T>::min())
 		{
-			std::cerr << "Error. theta_e must be >= " << std::numeric_limits<T>::min() << "\n";
+			std::cerr << "Error. theta_star must be >= " << std::numeric_limits<T>::min() << "\n";
 			return false;
 		}
 
@@ -277,8 +277,8 @@ private:
 		stopwatch.start();
 
 		/******************************************************************************
-		if star file is not specified, set the mass function, mean_mass, and
-		mean_mass2
+		if star file is not specified, set the mass function, mean_mass, mean_mass2,
+		and mean_mass2_ln_mass
 		******************************************************************************/
 		if (starfile == "")
 		{
@@ -303,8 +303,8 @@ private:
 		}
 		/******************************************************************************
 		if star file is specified, check validity of values and set num_stars,
-		rectangular, corner, theta_e, stars, kappa_star, m_lower, m_upper, mean_mass,
-		and mean_mass2 based on star information
+		rectangular, corner, theta_star, stars, kappa_star, m_lower, m_upper,
+		mean_mass, mean_mass2, and mean_mass2_ln_mass based on star information
 		******************************************************************************/
 		else
 		{
@@ -320,7 +320,7 @@ private:
 			set_param("num_stars", num_stars, num_stars, verbose);
 			set_param("rectangular", rectangular, rectangular, verbose);
 			set_param("corner", corner, corner, verbose);
-			set_param("theta_e", theta_e, theta_e, verbose);
+			set_param("theta_star", theta_star, theta_star, verbose);
 			set_param("kappa_star", kappa_star, kappa_star, verbose);
 			if (kappa_star > kappa_tot)
 			{
@@ -362,7 +362,7 @@ private:
 			}
 		}
 
-		alpha_error = theta_e * 0.0000001; //error is 10^-7 einstein radii
+		alpha_error = theta_star * 0.0000001; //error is 10^-7 einstein radii
 
 		taylor_smooth = std::max(
 			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (alpha_error * PI)) / std::log(1.1)),
@@ -785,7 +785,7 @@ private:
 			******************************************************************************/
 			print_progress(i, num_iters - 1);
 
-			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
+			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, 0, num_phi, num_branches, fin);
 			if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return false;
 		}
@@ -802,7 +802,7 @@ private:
 		calculate errors in 1/mu for initial roots
 		******************************************************************************/
 		print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
-		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
+		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, 0, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 
@@ -876,7 +876,7 @@ private:
 			******************************************************************************/
 			for (int i = 0; i < num_iters; i++)
 			{
-				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
+				find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 					rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, j, num_phi, num_branches, fin);
 				if (cuda_error("find_critical_curve_roots_kernel", false, __FILE__, __LINE__)) return false;
 			}
@@ -911,7 +911,7 @@ private:
 
 		for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 		{
-			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
+			find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, j, num_phi, num_branches, errs);
 			if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
 		}
@@ -953,7 +953,7 @@ private:
 
 		std::cout << "Finding caustic positions...\n";
 		stopwatch.start();
-		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_e, stars, kappa_star, tree[0],
+		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, caustics);
 		if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
 		t_caustics = stopwatch.stop();
@@ -990,7 +990,7 @@ private:
 		{
 			outfile << "kappa_star_actual " << kappa_star_actual << "\n";
 		}
-		outfile << "theta_e " << theta_e << "\n";
+		outfile << "theta_star " << theta_star << "\n";
 		outfile << "random_seed " << random_seed << "\n";
 		if (starfile == "")
 		{
@@ -1037,7 +1037,7 @@ private:
 
 		std::cout << "Writing star info...\n";
 		fname = outfile_prefix + "ccf_stars" + outfile_type;
-		if (!write_star_file<T>(num_stars, rectangular, corner, theta_e, stars, fname))
+		if (!write_star_file<T>(num_stars, rectangular, corner, theta_star, stars, fname))
 		{
 			std::cerr << "Error. Unable to write star info to file " << fname << "\n";
 			return false;

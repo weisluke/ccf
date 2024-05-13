@@ -35,7 +35,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-y", "--shear",
 	"-s", "--smooth_fraction", //provided as a courtesy in this executable. not part of the ccf class
 	"-ks", "--kappa_star",
-	"-t", "--theta_e",
+	"-t", "--theta_star",
 	"-mf", "--mass_function",
 	"-ms", "--m_solar",
 	"-ml", "--m_lower",
@@ -85,8 +85,8 @@ void display_usage(char* name)
 		<< "  -ks,--kappa_star      Specify the convergence in point mass lenses. If\n"
 		<< "                        provided, this overrides any supplied value for the\n"
 		<< "                        smooth fraction. Default value: " << ccf.kappa_star << "\n"
-		<< "  -t,--theta_e          Specify the size of the Einstein radius of a unit mass\n"
-		<< "                        point lens in arbitrary units. Default value: " << ccf.theta_e << "\n"
+		<< "  -t,--theta_star       Specify the size of the Einstein radius of a unit mass\n"
+		<< "                        point lens in arbitrary units. Default value: " << ccf.theta_star << "\n"
 		<< "  -mf,--mass_function   Specify the mass function to use for the point mass\n"
 		<< "                        lenses. Options are: equal, uniform, Salpeter, and\n"
 		<< "                        Kroupa. Default value: " << ccf.mass_function_str << "\n"
@@ -105,7 +105,7 @@ void display_usage(char* name)
 		<< "                        masses are desired, please input them through a file as\n"
 		<< "                        described in the -sf option.\n"
 		<< "  -sf,--starfile        Specify the location of a binary file containing values\n"
-		<< "                        for num_stars, rectangular, corner, theta_e, and the\n"
+		<< "                        for num_stars, rectangular, corner, theta_star, and the\n"
 		<< "                        star positions and masses, in an order as defined in\n"
 		<< "                        this source code.\n"
 		<< "  -np,--num_phi         Specify the number of steps used to vary phi in the\n"
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 		}
-		else if (argv[i] == std::string("-t") || argv[i] == std::string("--theta_e"))
+		else if (argv[i] == std::string("-t") || argv[i] == std::string("--theta_star"))
 		{
 			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--star_file"))
 			{
@@ -265,11 +265,11 @@ int main(int argc, char* argv[])
 			}
 			try
 			{
-				set_param("theta_e", ccf.theta_e, std::stod(cmdinput), verbose);
+				set_param("theta_star", ccf.theta_star, std::stod(cmdinput), verbose);
 			}
 			catch (...)
 			{
-				std::cerr << "Error. Invalid theta_e input.\n";
+				std::cerr << "Error. Invalid theta_star input.\n";
 				return -1;
 			}
 		}

@@ -329,7 +329,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					result = find_critical_curve_root(a, roots[center + sgn * j * nroots + a], kappa, gamma, theta, stars, kappastar, root, rectangular, corner, approx, taylor_smooth, phi0 + sgn * dphi, &(roots[center + sgn * j * nroots]), nroots);
 
 					/******************************************************************************
-					distance between old root and new root in units of theta_e
+					distance between old root and new root in units of theta_star
 					******************************************************************************/
 					norm = (result - roots[center + sgn * j * nroots + a]).abs() / theta;
 

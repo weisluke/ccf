@@ -162,8 +162,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	the value of 1/mu depends on the value of f0
 	this check ensures that the maximum possible value of 1/mu is less than desired
 	******************************************************************************/
-	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_a_smooth_d_z))) < 0.000000001 &&
-		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_a_smooth_d_z))) < 0.000000001)
+	if (fabs(f0.abs() * (f0.abs() + 2 * (1 - kappa - d_a_smooth_d_z))) < static_cast<T>(0.000000001) &&
+		fabs(f0.abs() * (f0.abs() - 2 * (1 - kappa - d_a_smooth_d_z))) < static_cast<T>(0.000000001))
 	{
 		return z;
 	}
@@ -337,7 +337,7 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 					compare position to previous value, if less than desired precision of 10^-9,
 					set fin[root] to true
 					******************************************************************************/
-					if (norm < 0.000000001)
+					if (norm < static_cast<T>(0.000000001))
 					{
 						fin[c * 2 * nroots + b * nroots + a] = true;
 					}
@@ -441,25 +441,6 @@ __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 		{
 			atomicExch(hasnan, 1);
 		}
-	}
-}
-
-/******************************************************************************
-set values in error array equal to max of element in first half and
-corresponding partner in second half
-
-\param errs -- pointer to array of errors
-\param nerrs -- half the number of errors in array
-******************************************************************************/
-template <typename T>
-__global__ void max_err_kernel(T* errs, int nerrs)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	for (int a = x_index; a < nerrs; a += x_stride)
-	{
-		errs[a] = fmax(errs[a], errs[a + nerrs]);
 	}
 }
 

@@ -15,6 +15,8 @@
 #include "util.cuh"
 
 #include <curand_kernel.h>
+#include <thrust/execution_policy.h> //for thrust::device
+#include <thrust/extrema.h> //for thrust::max_element
 
 #include <algorithm> //for std::min and std::max
 #include <chrono> //for setting random seed with clock
@@ -362,7 +364,7 @@ private:
 			}
 		}
 
-		alpha_error = theta_star * 0.0000001; //error is 10^-7 einstein radii
+		alpha_error = theta_star * static_cast<T>(0.0000001); //error is 10^-7 einstein radii
 
 		taylor_smooth = std::max(
 			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (alpha_error * PI)) / std::log(1.1)),
@@ -817,22 +819,8 @@ private:
 
 		/******************************************************************************
 		find max error and print
-		must be performed in loops as CUDA does not currently have an atomicMax for
-		floats or doubles, only ints
 		******************************************************************************/
-		int num_errs = (num_phi + num_branches) * num_roots;
-		while (num_errs > 1)
-		{
-			if (num_errs % 2 != 0)
-			{
-				errs[num_errs - 2] = std::fmax(errs[num_errs - 2], errs[num_errs - 1]);
-				num_errs -= 1;
-			}
-			num_errs /= 2;
-			max_err_kernel<T> <<<blocks, threads>>> (errs, num_errs);
-			if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return false;
-		}
-		max_error = errs[0];
+		max_error = *thrust::max_element(thrust::device, errs, errs + (num_phi + num_branches) * num_roots);
 		print_verbose("Done calculating maximum errors in 1/mu.\n", verbose);
 		std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
@@ -925,19 +913,7 @@ private:
 			return false;
 		}
 
-		int num_errs = (num_phi + num_branches) * num_roots;
-		while (num_errs > 1)
-		{
-			if (num_errs % 2 != 0)
-			{
-				errs[num_errs - 2] = std::fmax(errs[num_errs - 2], errs[num_errs - 1]);
-				num_errs -= 1;
-			}
-			num_errs /= 2;
-			max_err_kernel<T> <<<blocks, threads>>> (errs, num_errs);
-			if (cuda_error("max_err_kernel", true, __FILE__, __LINE__)) return false;
-		}
-		max_error = errs[0];
+		max_error = *thrust::max_element(thrust::device, errs, errs + (num_phi + num_branches) * num_roots);
 		std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
 
 

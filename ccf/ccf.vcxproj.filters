@@ -69,6 +69,9 @@
     <ClInclude Include="mass_functions.cuh">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="mass_functions\optical_depth.cuh">
+      <Filter>include\mass_functions</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="main.cu">

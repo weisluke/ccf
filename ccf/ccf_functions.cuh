@@ -124,6 +124,51 @@ __device__ Complex<T> d_parametric_critical_curve_dz(Complex<T> z, T kappa, T ga
 }
 
 /******************************************************************************
+magnification length scale for a given location on the critical curve
+
+\param z -- complex image plane position
+\param kappa -- total convergence
+\param gamma -- external shear
+\param theta -- size of the Einstein radius of a unit mass point lens
+\param stars -- pointer to array of point mass lenses
+\param kappastar -- convergence in point mass lenses
+\param node -- node within which to calculate the deflection angle
+\param rectangular -- whether the star field is rectangular or not
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
+
+\return the magnification length scale d_0 in the approximation
+        mu = sqrt(d_0 / d) for the magnification of an individual microimage
+        some distance d perpendicular to a caustic
+******************************************************************************/
+template <typename T>
+__device__ T mu_length_scale(Complex<T> z, T kappa, T gamma, T theta, star<T>* stars, T kappastar, TreeNode<T>* node,
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth)
+{
+	Complex<T> d_a_star_d_zbar = d_alpha_star_d_zbar(z, theta, stars, node);
+	Complex<T> d_a_local_d_zbar = d_alpha_local_d_zbar(z, theta, node);
+	T d_a_smooth_d_z = d_alpha_smooth_d_z(z, kappastar, rectangular, corner, approx);
+	Complex<T> d_a_smooth_d_zbar = d_alpha_smooth_d_zbar(z, kappastar, rectangular, corner, approx, taylor_smooth);
+
+	T d_w_d_z = 1 - kappa - d_a_smooth_d_z;
+	Complex<T> d_w_d_zbar = gamma - d_a_star_d_zbar - d_a_local_d_zbar - d_a_smooth_d_zbar;
+
+	Complex<T> d2_a_star_d_zbar2 = d2_alpha_star_d_zbar2(z, theta, stars, node);
+	Complex<T> d2_a_local_d_zbar2 = d2_alpha_local_d_zbar2(z, theta, node);
+	Complex<T> d2_a_smooth_d_zbar2 = d2_alpha_smooth_d_zbar2(z, kappastar, rectangular, corner, approx, taylor_smooth);
+
+	Complex<T> d2_w_d_zbar2 = -d2_a_star_d_zbar2 - d2_a_local_d_zbar2 - d2_a_smooth_d_zbar2;
+
+	Complex<T> critical_curve_tangent = Complex<T>(0, -2) * d_w_d_zbar.conj() * d2_w_d_zbar2;
+	Complex<T> caustic_tangent = d_w_d_z * critical_curve_tangent + d_w_d_zbar * critical_curve_tangent.conj();
+
+	return 1 / (2 * caustic_tangent.abs());
+}
+
+/******************************************************************************
 find an updated approximation for a particular critical curve
 root given the current approximation z and all other roots
 
@@ -478,6 +523,43 @@ __global__ void find_caustics_kernel(Complex<T>* z, int nroots, T kappa, T gamma
 		map image plane positions to source plane positions
 		******************************************************************************/
 		w[a] = complex_image_to_source(z[a], kappa, gamma, theta, stars, kappastar, node, rectangular, corner, approx, taylor_smooth);
+	}
+}
+
+/******************************************************************************
+find magnification length scales from critical curves for a star field
+
+\param z -- pointer to array of roots
+\param nroots -- number of roots in array
+\param kappa -- total convergence
+\param gamma -- external shear
+\param theta -- size of the Einstein radius of a unit mass point lens
+\param stars -- pointer to array of point mass lenses
+\param kappastar -- convergence in point mass lenses
+\param root -- pointer to root node
+\param rectangular -- whether the star field is rectangular or not
+\param corner -- complex number denoting the corner of the rectangular field of
+				 point mass lenses
+\param approx -- whether the smooth matter deflection is approximate or not
+\param taylor_smooth -- degree of the taylor series for alpha_smooth if 
+                        approximate
+\param d -- pointer to array of mu length scales
+******************************************************************************/
+template <typename T>
+__global__ void find_mu_length_scales_kernel(Complex<T>* z, int nroots, T kappa, T gamma, T theta, star<T>* stars, T kappastar, TreeNode<T>* root, 
+	int rectangular, Complex<T> corner, int approx, int taylor_smooth, T* d)
+{
+	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int x_stride = blockDim.x * gridDim.x;
+
+	for (int a = x_index; a < nroots; a += x_stride)
+	{
+		TreeNode<T>* node = treenode::get_nearest_node(z[a], root);
+
+		/******************************************************************************
+		calculate caustic strengths
+		******************************************************************************/
+		d[a] = mu_length_scale(z[a], kappa, gamma, theta, stars, kappastar, node, rectangular, corner, approx, taylor_smooth);
 	}
 }
 

@@ -55,6 +55,7 @@ public:
 	int write_stars = 1;
 	int write_critical_curves = 1;
 	int write_caustics = 1;
+	int write_mu_length_scales = 1;
 	std::string outfile_prefix = "./";
 
 
@@ -137,6 +138,7 @@ private:
 	T* errs = nullptr;
 	int* has_nan = nullptr;
 	Complex<T>* caustics = nullptr;
+	T* mu_length_scales = nullptr;
 
 
 
@@ -287,6 +289,14 @@ private:
 			std::cerr << "Error. write_caustics must be 1 (true) or 0 (false).\n";
 			return false;
 		}
+
+		if (write_mu_length_scales != 0 && write_mu_length_scales != 1)
+		{
+			std::cerr << "Error. write_mu_length_scales must be 1 (true) or 0 (false).\n";
+			return false;
+		}
+
+
 		std::cout << "Done checking input parameters.\n\n";
 		
 		return true;
@@ -467,6 +477,15 @@ private:
 		{
 			cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<T>));
 			if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return false;
+		}
+
+		/******************************************************************************
+		array to hold caustic strengths
+		******************************************************************************/
+		if (write_mu_length_scales)
+		{
+			cudaMallocManaged(&mu_length_scales, (num_phi + num_branches) * num_roots * sizeof(T));
+			if (cuda_error("cudaMallocManaged(*mu_length_scales)", false, __FILE__, __LINE__)) return false;
 		}
 
 		t_elapsed = stopwatch.stop();
@@ -991,6 +1010,22 @@ private:
 		return true;
 	}
 
+	bool find_mu_length_scales(bool verbose)
+	{
+		if (write_mu_length_scales)
+		{
+			set_threads(threads, 512);
+			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
+
+			std::cout << "Finding magnification length scales...\n";
+			stopwatch.start();
+			find_mu_length_scales_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
+				rectangular, corner, approx, taylor_smooth, mu_length_scales);
+			if (cuda_error("find_mu_length_scales_kernel", true, __FILE__, __LINE__)) return false;
+			t_elapsed = stopwatch.stop();
+			std::cout << "Done finding magnification length scales. Elapsed time: " << t_elapsed << " seconds.\n\n";
+		}
+
 		return true;
 	}
 
@@ -1111,6 +1146,21 @@ private:
 			std::cout << "Done writing caustic positions to file " << fname << "\n\n";
 		}
 
+		if (write_mu_length_scales)
+		{
+			/******************************************************************************
+			write caustic strengths
+			******************************************************************************/
+			std::cout << "Writing magnification length scales...\n";
+			fname = outfile_prefix + "ccf_mu_length_scales" + outfile_type;
+			if (!write_array<T>(mu_length_scales, num_roots * num_branches, num_phi / num_branches + 1, fname))
+			{
+				std::cerr << "Error. Unable to write magnification length scales info to file " << fname << "\n";
+				return false;
+			}
+			std::cout << "Done writing magnification length scales to file " << fname << "\n\n";
+		}
+
 		return true;
 	}
 
@@ -1128,6 +1178,7 @@ public:
 		if (!find_initial_roots(verbose)) return false;
 		if (!find_ccs(verbose)) return false;
 		if (!find_caustics(verbose)) return false;
+		if (!find_mu_length_scales(verbose)) return false;
 
 		return true;
 	}

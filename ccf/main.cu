@@ -26,7 +26,7 @@ CCF<dtype> ccf;
 /******************************************************************************
 constants to be used
 ******************************************************************************/
-constexpr int OPTS_SIZE = 2 * 19;
+constexpr int OPTS_SIZE = 2 * 23;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -50,6 +50,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-ws", "--write_stars",
 	"-wcc", "--write_critical_curves",
 	"-wc", "--write_caustics",
+	"-wls", "--write_length_scales",
 	"-o", "--outfile_prefix"
 };
 
@@ -445,6 +446,18 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid write_caustics input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-wls") || argv[i] == std::string("--write_length_scales"))
+		{
+			try
+			{
+				set_param("write_length_scales", ccf.write_length_scales, std::stoi(cmdinput), verbose);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid write_length_scales input.\n";
 				return -1;
 			}
 		}

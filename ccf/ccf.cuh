@@ -52,6 +52,7 @@ public:
 	int num_phi = 100;
 	int num_branches = 1;
 	int random_seed = 0;
+	int write_stars = 1;
 	std::string outfile_prefix = "./";
 
 
@@ -267,6 +268,11 @@ private:
 			return false;
 		}
 
+		if (write_stars != 0 && write_stars != 1)
+		{
+			std::cerr << "Error. write_stars must be 1 (true) or 0 (false).\n";
+			return false;
+		}
 
 		std::cout << "Done checking input parameters.\n\n";
 		
@@ -1031,14 +1037,17 @@ private:
 		std::cout << "Done writing parameter info to file " << fname << "\n\n";
 
 
-		std::cout << "Writing star info...\n";
-		fname = outfile_prefix + "ccf_stars" + outfile_type;
-		if (!write_star_file<T>(num_stars, rectangular, corner, theta_star, stars, fname))
+		if (write_stars)
 		{
-			std::cerr << "Error. Unable to write star info to file " << fname << "\n";
-			return false;
+			std::cout << "Writing star info...\n";
+			fname = outfile_prefix + "ccf_stars" + outfile_type;
+			if (!write_star_file<T>(num_stars, rectangular, corner, theta_star, stars, fname))
+			{
+				std::cerr << "Error. Unable to write star info to file " << fname << "\n";
+				return false;
+			}
+			std::cout << "Done writing star info to file " << fname << "\n\n";
 		}
-		std::cout << "Done writing star info to file " << fname << "\n\n";
 
 
 		/******************************************************************************

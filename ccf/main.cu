@@ -1,4 +1,4 @@
-﻿/******************************************************************************
+/******************************************************************************
 
 Please provide credit to Luke Weisenbach should this code be used.
 Email: weisluke@alum.mit.edu
@@ -47,6 +47,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-np", "--num_phi",
 	"-nb", "--num_branches",
 	"-rs", "--random_seed",
+	"-ws", "--write_stars",
 	"-o", "--outfile_prefix"
 };
 
@@ -406,6 +407,18 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid random_seed input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ws") || argv[i] == std::string("--write_stars"))
+		{
+			try
+			{
+				set_param("write_stars", ccf.write_stars, std::stoi(cmdinput), verbose);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid write_stars input.\n";
 				return -1;
 			}
 		}

@@ -94,7 +94,7 @@ void display_usage(char* name)
 		<< "                             Default value: " << ccf.theta_star << "\n"
 		<< "  -mf,--mass_function        Specify the mass function to use for the point\n"
 		<< "                             mass lenses. Options are: equal, uniform,\n"
-		<< "                             Salpeter, and, Kroupa, or optical_depth."
+		<< "                             Salpeter, and, Kroupa, or optical_depth.\n"
 		<< "                             Default value: " << ccf.mass_function_str << "\n"
 		<< "  -ms,--m_solar              Specify the solar mass in arbitrary units.\n"
 		<< "                             Default value: " << ccf.m_solar << "\n"

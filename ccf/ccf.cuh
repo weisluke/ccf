@@ -53,6 +53,8 @@ public:
 	int num_branches = 1;
 	int random_seed = 0;
 	int write_stars = 1;
+	int write_critical_curves = 1;
+	int write_caustics = 1;
 	std::string outfile_prefix = "./";
 
 
@@ -274,6 +276,17 @@ private:
 			return false;
 		}
 
+		if (write_critical_curves != 0 && write_critical_curves != 1)
+		{
+			std::cerr << "Error. write_critical_curves must be 1 (true) or 0 (false).\n";
+			return false;
+		}
+
+		if (write_caustics != 0 && write_caustics != 1)
+		{
+			std::cerr << "Error. write_caustics must be 1 (true) or 0 (false).\n";
+			return false;
+		}
 		std::cout << "Done checking input parameters.\n\n";
 		
 		return true;
@@ -450,8 +463,11 @@ private:
 		/******************************************************************************
 		array to hold caustic positions
 		******************************************************************************/
-		cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<T>));
-		if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return false;
+		if (write_caustics)
+		{
+			cudaMallocManaged(&caustics, (num_phi + num_branches) * num_roots * sizeof(Complex<T>));
+			if (cuda_error("cudaMallocManaged(*caustics)", false, __FILE__, __LINE__)) return false;
+		}
 
 		t_elapsed = stopwatch.stop();
 		std::cout << "Done allocating memory. Elapsed time: " << t_elapsed << " seconds.\n\n";
@@ -854,7 +870,7 @@ private:
 		return true;
 	}
 
-	bool find_ccs_caustics(bool verbose)
+	bool find_ccs(bool verbose)
 	{
 		/******************************************************************************
 		reduce number of iterations needed, as roots should stay close to previous
@@ -953,13 +969,27 @@ private:
 		t_elapsed = stopwatch.stop();
 		print_verbose("Done transposing critical curve array. Elapsed time: " + std::to_string(t_elapsed) + " seconds.\n\n", verbose);
 
-		std::cout << "Finding caustic positions...\n";
-		stopwatch.start();
-		find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
-			rectangular, corner, approx, taylor_smooth, caustics);
-		if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
-		t_caustics = stopwatch.stop();
-		std::cout << "Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n";
+		return true;
+	}
+
+	bool find_caustics(bool verbose)
+	{
+		if (write_caustics)
+		{
+			set_threads(threads, 512);
+			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
+
+			std::cout << "Finding caustic positions...\n";
+			stopwatch.start();
+			find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
+				rectangular, corner, approx, taylor_smooth, caustics);
+			if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
+			t_caustics = stopwatch.stop();
+			std::cout << "Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n";
+		}
+
+		return true;
+	}
 
 		return true;
 	}
@@ -1053,27 +1083,33 @@ private:
 		/******************************************************************************
 		write critical curve positions
 		******************************************************************************/
-		std::cout << "Writing critical curve positions...\n";
-		fname = outfile_prefix + "ccf_ccs" + outfile_type;
-		if (!write_array<Complex<T>>(ccs, num_roots * num_branches, num_phi / num_branches + 1, fname))
+		if (write_critical_curves)
 		{
-			std::cerr << "Error. Unable to write ccs info to file " << fname << "\n";
-			return false;
+			std::cout << "Writing critical curve positions...\n";
+			fname = outfile_prefix + "ccf_ccs" + outfile_type;
+			if (!write_array<Complex<T>>(ccs, num_roots * num_branches, num_phi / num_branches + 1, fname))
+			{
+				std::cerr << "Error. Unable to write ccs info to file " << fname << "\n";
+				return false;
+			}
+			std::cout << "Done writing critical curve positions to file " << fname << "\n\n";
 		}
-		std::cout << "Done writing critical curve positions to file " << fname << "\n\n";
 
 
 		/******************************************************************************
 		write caustic positions
 		******************************************************************************/
-		std::cout << "Writing caustic positions...\n";
-		fname = outfile_prefix + "ccf_caustics" + outfile_type;
-		if (!write_array<Complex<T>>(caustics, num_roots * num_branches, num_phi / num_branches + 1, fname))
+		if (write_caustics)
 		{
-			std::cerr << "Error. Unable to write caustic info to file " << fname << "\n";
-			return false;
+			std::cout << "Writing caustic positions...\n";
+			fname = outfile_prefix + "ccf_caustics" + outfile_type;
+			if (!write_array<Complex<T>>(caustics, num_roots * num_branches, num_phi / num_branches + 1, fname))
+			{
+				std::cerr << "Error. Unable to write caustic info to file " << fname << "\n";
+				return false;
+			}
+			std::cout << "Done writing caustic positions to file " << fname << "\n\n";
 		}
-		std::cout << "Done writing caustic positions to file " << fname << "\n\n";
 
 		return true;
 	}
@@ -1090,7 +1126,8 @@ public:
 		if (!populate_star_array(verbose)) return false;
 		if (!create_tree(verbose)) return false;
 		if (!find_initial_roots(verbose)) return false;
-		if (!find_ccs_caustics(verbose)) return false;
+		if (!find_ccs(verbose)) return false;
+		if (!find_caustics(verbose)) return false;
 
 		return true;
 	}

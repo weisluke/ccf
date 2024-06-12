@@ -48,6 +48,8 @@ const std::string OPTS[OPTS_SIZE] =
 	"-nb", "--num_branches",
 	"-rs", "--random_seed",
 	"-ws", "--write_stars",
+	"-wcc", "--write_critical_curves",
+	"-wc", "--write_caustics",
 	"-o", "--outfile_prefix"
 };
 
@@ -419,6 +421,30 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid write_stars input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-wcc") || argv[i] == std::string("--write_critical_curves"))
+		{
+			try
+			{
+				set_param("write_critical_curves", ccf.write_critical_curves, std::stoi(cmdinput), verbose);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid write_critical_curves input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-wc") || argv[i] == std::string("--write_caustics"))
+		{
+			try
+			{
+				set_param("write_caustics", ccf.write_caustics, std::stoi(cmdinput), verbose);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid write_caustics input.\n";
 				return -1;
 			}
 		}

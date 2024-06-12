@@ -468,7 +468,7 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				set_param("write_length_scales", ccf.write_length_scales, std::stoi(cmdinput), verbose);
+				set_param("write_length_scales", ccf.write_mu_length_scales, std::stoi(cmdinput), verbose);
 			}
 			catch (...)
 			{

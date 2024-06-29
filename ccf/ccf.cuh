@@ -425,7 +425,7 @@ private:
 		******************************************************************************/
 		cudaMallocManaged(&states, num_stars * sizeof(curandState));
 		if (cuda_error("cudaMallocManaged(*states)", false, __FILE__, __LINE__)) return false;
-		if (stars == nullptr) // if memory wasn't allocated already due to reading a star file
+		if (stars == nullptr) //if memory wasn't allocated already due to reading a star file
 		{
 			cudaMallocManaged(&stars, num_stars * sizeof(star<T>));
 			if (cuda_error("cudaMallocManaged(*stars)", false, __FILE__, __LINE__)) return false;
@@ -995,7 +995,7 @@ private:
 	{
 		if (write_caustics)
 		{
-			set_threads(threads, 512);
+			set_threads(threads, 256);
 			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
 			std::cout << "Finding caustic positions...\n";
@@ -1014,7 +1014,7 @@ private:
 	{
 		if (write_mu_length_scales)
 		{
-			set_threads(threads, 512);
+			set_threads(threads, 256);
 			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
 			std::cout << "Finding magnification length scales...\n";

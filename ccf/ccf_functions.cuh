@@ -237,8 +237,8 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 		}
 	}
 
-	Complex<T> result = f1 / f0 + starsum - rootsum;
-	return z - 1 / result;
+	Complex<T> result = f1 + f0 * (starsum - rootsum);
+	return z - f0 / result;
 }
 
 /******************************************************************************

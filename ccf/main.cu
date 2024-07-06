@@ -374,6 +374,10 @@ int main(int argc, char* argv[])
 		}
 		else if (argv[i] == std::string("-ns") || argv[i] == std::string("--num_stars"))
 		{
+			if (cmd_option_exists(argv, argv + argc, "-sf") || cmd_option_exists(argv, argv + argc, "--starfile"))
+			{
+				continue;
+			}
 			try
 			{
 				set_param("num_stars", ccf.num_stars, std::stoi(cmdinput), verbose);

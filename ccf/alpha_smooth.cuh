@@ -178,12 +178,22 @@ __device__ Complex<T> d_alpha_smooth_d_zbar(Complex<T> z, T kappastar, int recta
 			Complex<T> r = z.conj() / corner; //geometric series ratio
 			Complex<T> phase = Complex<T>(0, 2 * corner.arg());
 
-			if (taylor_smooth % 2 == 0)
+			int t = taylor_smooth;
+			if (taylor_smooth % 2 != 0)
 			{
-				d_a_smooth_d_zbar = (1 - (phase * taylor_smooth).exp());
+				t -= 1;
+			}
+			if ((1 - (phase * t).exp()).abs() < static_cast<T>(0.000000001))
+			{
+				t -= 2;
 			}
 
-			for (int i = (taylor_smooth % 2 == 0 ? taylor_smooth : taylor_smooth - 1); i >= 2; i -= 2)
+			if (taylor_smooth % 2 == 0 && (1 - (phase * taylor_smooth).exp()).abs() >= static_cast<T>(0.000000001))
+			{
+				d_a_smooth_d_zbar += (1 - (phase * taylor_smooth).exp());
+			}
+
+			for (int i = t; i >= 2; i -= 2)
 			{
 				d_a_smooth_d_zbar += (1 - (phase * i).exp()) / i;
 				d_a_smooth_d_zbar *= (r * r);
@@ -237,12 +247,22 @@ __device__ Complex<T> d2_alpha_smooth_d_zbar2(Complex<T> z, T kappastar, int rec
 			Complex<T> r = z.conj() / corner; //geometric series ratio
 			Complex<T> phase = Complex<T>(0, 2 * corner.arg());
 
-			if (taylor_smooth % 2 == 0)
+			int t = taylor_smooth;
+			if (taylor_smooth % 2 != 0)
 			{
-				d2_a_smooth_d_zbar2 = taylor_smooth * (1 - (phase * taylor_smooth).exp());
+				t -= 1;
+			}
+			if ((1 - (phase * t).exp()).abs() < static_cast<T>(0.000000001))
+			{
+				t -= 2;
 			}
 
-			for (int i = (taylor_smooth % 2 == 0 ? taylor_smooth : taylor_smooth - 1); i >= 2; i -= 2)
+			if (taylor_smooth % 2 == 0 && (1 - (phase * taylor_smooth).exp()).abs() >= static_cast<T>(0.000000001))
+			{
+				d2_a_smooth_d_zbar2 += taylor_smooth * (1 - (phase * taylor_smooth).exp());
+			}
+
+			for (int i = t; i >= 2; i -= 2)
 			{
 				d2_a_smooth_d_zbar2 += (1 - (phase * i).exp());
 				d2_a_smooth_d_zbar2 *= (r * r);

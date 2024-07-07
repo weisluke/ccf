@@ -406,7 +406,19 @@ private:
 		set_param("num_roots", num_roots, 2 * num_stars, verbose && !(rectangular && approx));
 		if (rectangular && approx)
 		{
-			set_param("num_roots", num_roots, num_roots + static_cast<int>(taylor_smooth / 2) * 2, verbose);
+			Complex<T> phase = Complex<T>(0, 2 * corner.arg());
+			int t = taylor_smooth;
+
+			if (taylor_smooth % 2 != 0)
+			{
+				t -= 1;
+			}
+			if ((1 - (phase * t).exp()).abs() < static_cast<T>(0.000000001))
+			{
+				t -= 2;
+			}
+
+			set_param("num_roots", num_roots, num_roots + t, verbose);
 		}
 
 		t_elapsed = stopwatch.stop();
@@ -853,7 +865,7 @@ private:
 			if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return false;
 		}
 		t_init_roots = stopwatch.stop();
-		std::cout << "\nDone finding roots. Elapsed time: " << t_elapsed << " seconds.\n";
+		std::cout << "\nDone finding roots. Elapsed time: " << t_init_roots << " seconds.\n";
 
 
 		/******************************************************************************
@@ -864,6 +876,9 @@ private:
 		/******************************************************************************
 		calculate errors in 1/mu for initial roots
 		******************************************************************************/
+		set_threads(threads, 512);
+		set_blocks(threads, blocks, (num_phi + num_branches) * num_roots);
+
 		print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
 		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, 0, num_phi, num_branches, errs);
@@ -956,6 +971,9 @@ private:
 		/******************************************************************************
 		find max error in 1/mu over whole critical curve array and print
 		******************************************************************************/
+		set_threads(threads, 512);
+		set_blocks(threads, blocks, (num_phi + num_branches) * num_roots);
+
 		std::cout << "Finding maximum error in 1/mu over all calculated critical curve positions...\n";
 
 		for (int j = 0; j <= num_phi / (2 * num_branches); j++)

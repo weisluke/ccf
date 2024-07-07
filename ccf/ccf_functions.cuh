@@ -482,7 +482,7 @@ __global__ void has_nan_err_kernel(T* errs, int nerrs, int* hasnan)
 
 	for (int a = x_index; a < nerrs; a += x_stride)
 	{
-		if (!isfinite(errs[a]))
+		if (isnan(errs[a]))
 		{
 			atomicExch(hasnan, 1);
 		}

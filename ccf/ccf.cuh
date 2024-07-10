@@ -395,10 +395,23 @@ private:
 
 		alpha_error = theta_star * static_cast<T>(0.0000001); //error is 10^-7 einstein radii
 
-		taylor_smooth = std::max(
-			static_cast<int>(std::log(2 * kappa_star * corner.abs() / (alpha_error * PI)) / std::log(1.1)),
-			1);
+		taylor_smooth = 31;
+		/******************************************************************************
+		if phase * (taylor_smooth - 1), a term in the approximation of alpha_smooth, is
+		not in the correct fractional range of pi, increase taylor_smooth
+		this is due to NOT wanting cos(phase * (taylor_smooth - 1)) = 0, within errors
+		******************************************************************************/
+		while (std::fmod(corner.arg() * (taylor_smooth - 1), PI) < 0.1 * PI 
+			|| std::fmod(corner.arg() * (taylor_smooth - 1), PI) > 0.9 * PI)
+		{
+			taylor_smooth += 2;
+		}		
 		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose && rectangular && approx);
+		if (taylor_smooth > 101) //arbitrary limit to the expansion order to avoid numerical precision loss from high degree polynomials
+		{
+			std::cerr << "Error. taylor_smooth must be <= 101\n";
+			return false;
+		}
 		
 		/******************************************************************************
 		number of roots to be found
@@ -406,19 +419,7 @@ private:
 		set_param("num_roots", num_roots, 2 * num_stars, verbose && !(rectangular && approx));
 		if (rectangular && approx)
 		{
-			Complex<T> phase = Complex<T>(0, 2 * corner.arg());
-			int t = taylor_smooth;
-
-			if (taylor_smooth % 2 != 0)
-			{
-				t -= 1;
-			}
-			if ((1 - (phase * t).exp()).abs() < static_cast<T>(0.000000001))
-			{
-				t -= 2;
-			}
-
-			set_param("num_roots", num_roots, num_roots + t, verbose);
+			set_param("num_roots", num_roots, num_roots + taylor_smooth - 1, verbose);
 		}
 
 		t_elapsed = stopwatch.stop();

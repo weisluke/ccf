@@ -7,11 +7,6 @@
 #include "star.cuh"
 #include "tree_node.cuh"
 
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <string>
-
 
 /******************************************************************************
 lens equation from image plane to source plane
@@ -563,63 +558,3 @@ __global__ void find_mu_length_scales_kernel(Complex<T>* z, int nroots, T kappa,
 	}
 }
 
-/******************************************************************************
-transpose array
-
-\param z1 -- pointer to array of values
-\param nrows -- number of rows in array
-\param ncols -- number of columns in array
-\param z2 -- pointer to transposed array of values
-******************************************************************************/
-template <typename T>
-__global__ void transpose_array_kernel(Complex<T>* z1, int nrows, int ncols, Complex<T>* z2)
-{
-	int x_index = blockIdx.x * blockDim.x + threadIdx.x;
-	int x_stride = blockDim.x * gridDim.x;
-
-	for (int a = x_index; a < nrows * ncols; a += x_stride)
-	{
-		int col = a % ncols;
-		int row = (a - col) / ncols;
-
-		z2[col * nrows + row] = z1[a];
-	}
-}
-
-/******************************************************************************
-write array of values to disk
-
-\param vals -- pointer to array of values
-\param nrows -- number of rows in array
-\param ncols -- number of columns in array
-\param fname -- location of the file to write to
-
-\return bool -- true if file is successfully written, false if not
-******************************************************************************/
-template <typename T>
-bool write_array(T* vals, int nrows, int ncols, const std::string& fname)
-{
-	std::filesystem::path fpath = fname;
-
-	if (fpath.extension() != ".bin")
-	{
-		std::cerr << "Error. File " << fname << " is not a .bin file.\n";
-		return false;
-	}
-
-	std::ofstream outfile;
-
-	outfile.open(fname, std::ios_base::binary);
-
-	if (!outfile.is_open())
-	{
-		std::cerr << "Error. Failed to open file " << fname << "\n";
-		return false;
-	}
-	outfile.write((char*)(&nrows), sizeof(int));
-	outfile.write((char*)(&ncols), sizeof(int));
-	outfile.write((char*)vals, nrows * ncols * sizeof(T));
-	outfile.close();
-
-	return true;
-}

@@ -1003,7 +1003,7 @@ private:
 
 		print_verbose("Transposing critical curve array...\n", verbose);
 		stopwatch.start();
-		transpose_array_kernel<T> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
+		transpose_array_kernel<Complex<T>> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 		if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return false;
 		t_elapsed = stopwatch.stop();
 		print_verbose("Done transposing critical curve array. Elapsed time: " + std::to_string(t_elapsed) + " seconds.\n\n", verbose);

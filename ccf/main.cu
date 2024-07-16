@@ -26,7 +26,7 @@ CCF<dtype> ccf;
 /******************************************************************************
 constants to be used
 ******************************************************************************/
-constexpr int OPTS_SIZE = 2 * 23;
+constexpr int OPTS_SIZE = 2 * 24;
 const std::string OPTS[OPTS_SIZE] =
 {
 	"-h", "--help",
@@ -42,6 +42,7 @@ const std::string OPTS[OPTS_SIZE] =
 	"-mh", "--m_upper",
 	"-r", "--rectangular",
 	"-a", "--approx",
+	"-ss", "--safety_scale",
 	"-ns", "--num_stars",
 	"-sf", "--starfile",
 	"-np", "--num_phi",
@@ -106,11 +107,11 @@ void display_usage(char* name)
 		<< "                             rectangular (1) or circular (0). Default value: " << ccf.rectangular << "\n"
 		<< "  -a,--approx                Specify whether terms for alpha_smooth should be\n"
 		<< "                             approximated (1) or exact (0). Default value: " << ccf.approx << "\n"
+		<< "  -ss,--safety_scale         Specify the ratio of the size of the star field to\n"
+		<< "                             the radius of convergence for alpha_smooth.\n"
+		<< "                             Default value: " << ccf.safety_scale << "\n"
 		<< "  -ns,--num_stars            Specify the number of stars desired.\n"
 		<< "                             Default value: " << ccf.num_stars << "\n"
-		<< "                             All stars are taken to be of unit mass. If a range\n"
-		<< "                             of masses are desired, please input them through a\n"
-		<< "                             file as described in the -sf option.\n"
 		<< "  -sf,--starfile             Specify the location of a binary file containing\n"
 		<< "                             values for num_stars, rectangular, corner,\n"
 		<< "                             theta_star, and the star positions and masses, in\n"
@@ -369,6 +370,18 @@ int main(int argc, char* argv[])
 			catch (...)
 			{
 				std::cerr << "Error. Invalid approx input.\n";
+				return -1;
+			}
+		}
+		else if (argv[i] == std::string("-ss") || argv[i] == std::string("--safety_scale"))
+		{
+			try
+			{
+				set_param("safety_scale", ccf.safety_scale, std::stod(cmdinput), verbose);
+			}
+			catch (...)
+			{
+				std::cerr << "Error. Invalid safety_scale input.\n";
 				return -1;
 			}
 		}

@@ -49,6 +49,7 @@ public:
 	T m_upper = static_cast<T>(50);
 	int rectangular = 1; //whether star field is rectangular or circular
 	int approx = 1; //whether terms for alpha_smooth are exact or approximate
+	T safety_scale = static_cast<T>(1.37); //ratio of the size of the star field to the radius of convergence for alpha_smooth
 	int num_stars = 137;
 	std::string starfile = "";
 	int num_phi = 100;
@@ -248,6 +249,18 @@ private:
 			std::cerr << "Error. approx must be 1 (approximate) or 0 (exact).\n";
 			return false;
 		}
+
+		/******************************************************************************
+		if the alpha_smooth comes from a rectangular mass sheet, finding the caustics
+		requires a Taylor series approximation to alpha_smooth. a bound on the error of
+		that series necessitates having some minimum cutoff here for the ratio of the
+		size of the star field to the radius of convergence for alpha_smooth
+		******************************************************************************/
+		if (safety_scale < 1.1)
+		{
+			std::cerr << "Error. safety_scale must be >= 1.1\n";
+			return false;
+		}
 		
 		if (num_stars < 1)
 		{
@@ -396,7 +409,13 @@ private:
 
 		alpha_error = theta_star * static_cast<T>(0.0000001); //error is 10^-7 einstein radii
 
-		taylor_smooth = 31;
+		taylor_smooth = 1;
+		while ((kappa_star / std::numbers::pi_v<T> * 4 / (taylor_smooth + 1) * corner.abs() * (safety_scale + 1) / (safety_scale - 1)
+				* std::pow(1 / safety_scale, taylor_smooth + 1) > alpha_error)
+				&& taylor_smooth <= MAX_TAYLOR_SMOOTH)
+		{
+			taylor_smooth += 2;
+		}
 		/******************************************************************************
 		if phase * (taylor_smooth - 1), a term in the approximation of alpha_smooth, is
 		not in the correct fractional range of pi, increase taylor_smooth

@@ -47,7 +47,7 @@ public:
 	T m_solar = static_cast<T>(1);
 	T m_lower = static_cast<T>(0.01);
 	T m_upper = static_cast<T>(50);
-	int rectangular = 1; //whether star field is rectangular or circular
+	int rectangular = 0; //whether star field is rectangular or circular
 	int approx = 1; //whether terms for alpha_smooth are exact or approximate
 	T safety_scale = static_cast<T>(1.37); //ratio of the size of the star field to the radius of convergence for alpha_smooth
 	int num_stars = 137;
@@ -437,10 +437,28 @@ private:
 		/******************************************************************************
 		number of roots to be found
 		******************************************************************************/
-		set_param("num_roots", num_roots, 2 * num_stars, verbose && !(rectangular && approx));
-		if (rectangular && approx)
+		if (rectangular)
 		{
-			set_param("num_roots", num_roots, num_roots + taylor_smooth - 1, verbose);
+			if (approx)
+			{
+				set_param("num_roots", num_roots, 2 * num_stars + taylor_smooth - 1, verbose);
+			}
+			else
+			{
+				set_param("num_roots", num_roots, 2 * num_stars, verbose);
+			}
+			
+		}
+		else
+		{
+			if (approx)
+			{
+				set_param("num_roots", num_roots, 2 * num_stars, verbose);
+			}
+			else
+			{
+				set_param("num_roots", num_roots, 2 * num_stars + 2, verbose);
+			}
 		}
 
 		t_elapsed = stopwatch.stop();
@@ -669,14 +687,12 @@ private:
 				ccs_init[center + i] = stars[i].position + 1;
 				ccs_init[center + i + num_stars] = stars[i].position - 1;
 			}
-			if (rectangular && approx)
+			int nroots_extra = num_roots - 2 * num_stars;
+			for (int i = 0; i < nroots_extra; i++)
 			{
-				int nroots_extra = static_cast<int>(taylor_smooth / 2) * 2;
-				for (int i = 0; i < nroots_extra; i++)
-				{
-					ccs_init[center + 2 * num_stars + i] = corner.abs() *
-						Complex<T>(std::cos(2 * std::numbers::pi_v<T> / nroots_extra * i), std::sin(2 * std::numbers::pi_v<T> / nroots_extra * i));
-				}
+				ccs_init[center + 2 * num_stars + i] = corner.abs() *
+					Complex<T>(std::cos(2 * std::numbers::pi_v<T> / nroots_extra * i), 
+								std::sin(2 * std::numbers::pi_v<T> / nroots_extra * i));
 			}
 		}
 		print_verbose("Done initializing root positions.\n\n", verbose);

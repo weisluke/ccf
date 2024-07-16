@@ -211,28 +211,32 @@ __device__ Complex<T> find_critical_curve_root(int k, Complex<T> z, T kappa, T g
 	Complex<T> f1 = d_parametric_critical_curve_dz(z, kappa, gamma, theta, stars, kappastar, node, rectangular, corner, approx, taylor_smooth);
 
 	/******************************************************************************
-	contribution due to distance between root and stars
+	contribution due to distance between root and poles
 	******************************************************************************/
-	Complex<T> starsum;
+	Complex<T> p_sum;
 	for (int i = 0; i < root->numstars; i++)
 	{
-		starsum += 1 / (z - stars[root->stars + i].position);
+		p_sum += 1 / (z - stars[root->stars + i].position);
 	}
-	starsum *= 2;
+	if (!rectangular && !approx)
+	{
+		p_sum += 1 / z;
+	}
+	p_sum *= 2;
 
 	/******************************************************************************
 	contribution due to distance between root and other roots
 	******************************************************************************/
-	Complex<T> rootsum;
+	Complex<T> root_sum;
 	for (int i = 0; i < nroots; i++)
 	{
 		if (i != k)
 		{
-			rootsum += 1 / (z - roots[i]);
+			root_sum += 1 / (z - roots[i]);
 		}
 	}
 
-	Complex<T> result = f1 + f0 * (starsum - rootsum);
+	Complex<T> result = f1 + f0 * (p_sum - root_sum);
 	return z - f0 / result;
 }
 

@@ -26,6 +26,7 @@
 #include <iostream>
 #include <limits> //for std::numeric_limits
 #include <memory> //for std::shared_ptr
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -73,9 +74,8 @@ private:
 	/******************************************************************************
 	constant variables
 	******************************************************************************/
-	const T PI = static_cast<T>(3.1415926535898);
-	const T E = static_cast<T>(2.718281828459);
 	const std::string outfile_type = ".bin";
+	const int MAX_TAYLOR_SMOOTH = 101; //arbitrary limit to the expansion order to avoid numerical precision loss from high degree polynomials
 
 	/******************************************************************************
 	variables for cuda device, kernel threads, and kernel blocks
@@ -383,7 +383,7 @@ private:
 			if (rectangular)
 			{
 				corner = Complex<T>(std::sqrt(corner.re / corner.im), std::sqrt(corner.im / corner.re));
-				corner *= std::sqrt(PI * theta_star * theta_star * num_stars * mean_mass / (4 * kappa_star));
+				corner *= std::sqrt(std::numbers::pi_v<T> * theta_star * theta_star * num_stars * mean_mass / (4 * kappa_star));
 				set_param("corner", corner, corner, verbose);
 			}
 			else
@@ -402,15 +402,16 @@ private:
 		not in the correct fractional range of pi, increase taylor_smooth
 		this is due to NOT wanting cos(phase * (taylor_smooth - 1)) = 0, within errors
 		******************************************************************************/
-		while (std::fmod(corner.arg() * (taylor_smooth - 1), PI) < 0.1 * PI 
-			|| std::fmod(corner.arg() * (taylor_smooth - 1), PI) > 0.9 * PI)
+		while ((std::fmod(corner.arg() * (taylor_smooth - 1), std::numbers::pi_v<T>) < 0.1 * std::numbers::pi_v<T> 
+				|| std::fmod(corner.arg() * (taylor_smooth - 1), std::numbers::pi_v<T>) > 0.9 * std::numbers::pi_v<T>)
+				&& taylor_smooth <= MAX_TAYLOR_SMOOTH)
 		{
 			taylor_smooth += 2;
 		}		
 		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose && rectangular && approx);
-		if (taylor_smooth > 101) //arbitrary limit to the expansion order to avoid numerical precision loss from high degree polynomials
+		if (taylor_smooth > MAX_TAYLOR_SMOOTH)
 		{
-			std::cerr << "Error. taylor_smooth must be <= 101\n";
+			std::cerr << "Error. taylor_smooth must be <= " << MAX_TAYLOR_SMOOTH << "\n";
 			return false;
 		}
 		
@@ -621,7 +622,7 @@ private:
 			if (rectangular)
 			{
 				corner = Complex<T>(std::sqrt(corner.re / corner.im), std::sqrt(corner.im / corner.re));
-				corner *= std::sqrt(PI * theta_star * theta_star * num_stars * mean_mass_actual / (4 * kappa_star));
+				corner *= std::sqrt(std::numbers::pi_v<T> * theta_star * theta_star * num_stars * mean_mass_actual / (4 * kappa_star));
 				set_param("corner", corner, corner, verbose, true);
 			}
 			else
@@ -655,7 +656,7 @@ private:
 				for (int i = 0; i < nroots_extra; i++)
 				{
 					ccs_init[center + 2 * num_stars + i] = corner.abs() *
-						Complex<T>(std::cos(2 * PI / nroots_extra * i), std::sin(2 * PI / nroots_extra * i));
+						Complex<T>(std::cos(2 * std::numbers::pi_v<T> / nroots_extra * i), std::sin(2 * std::numbers::pi_v<T> / nroots_extra * i));
 				}
 			}
 		}

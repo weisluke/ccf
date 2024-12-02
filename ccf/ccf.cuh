@@ -118,9 +118,9 @@ private:
 	int expansion_order;
 
 	T root_half_length;
-	int tree_levels = 0;
-	std::vector<TreeNode<T>*> tree = {};
-	std::vector<int> num_nodes = {};
+	int tree_levels;
+	std::vector<TreeNode<T>*> tree;
+	std::vector<int> num_nodes;
 
 	int num_roots;
 	T max_error;
@@ -128,21 +128,44 @@ private:
 	/******************************************************************************
 	dynamic memory
 	******************************************************************************/
-	curandState* states = nullptr;
-	star<T>* stars = nullptr;
-	star<T>* temp_stars = nullptr;
+	curandState* states;
+	star<T>* stars;
+	star<T>* temp_stars;
 
-	int* binomial_coeffs = nullptr;
+	int* binomial_coeffs;
 
-	Complex<T>* ccs_init = nullptr;
-	Complex<T>* ccs = nullptr;
-	bool* fin = nullptr;
-	T* errs = nullptr;
-	int* has_nan = nullptr;
-	Complex<T>* caustics = nullptr;
-	T* mu_length_scales = nullptr;
+	Complex<T>* ccs_init;
+	Complex<T>* ccs;
+	bool* fin;
+	T* errs;
+	int* has_nan;
+	Complex<T>* caustics;
+	T* mu_length_scales;
 
 
+
+	bool clear_memory(int verbose)
+	{
+		cudaDeviceReset(); //free all previously allocated memory
+		if (cuda_error("cudaDeviceReset", false, __FILE__, __LINE__)) return false;
+		
+		//and set variables to nullptr
+		states = nullptr;
+		stars = nullptr;
+		temp_stars = nullptr;
+
+		binomial_coeffs = nullptr;
+
+		ccs_init = nullptr;
+		ccs = nullptr;
+		fin = nullptr;
+		errs = nullptr;
+		has_nan = nullptr;
+		caustics = nullptr;
+		mu_length_scales = nullptr;
+
+		return true;
+	}
 
 	bool set_cuda_devices(int verbose)
 	{
@@ -713,7 +736,12 @@ private:
 		{
 			root_half_length = corner.abs();
 		}
-		set_param("root_half_length", root_half_length, root_half_length * 1.1, verbose); //slight buffer for containing all the stars
+		set_param("root_half_length", root_half_length, root_half_length * 1.1, verbose, true); //slight buffer for containing all the stars
+
+		//initialize variables
+		tree_levels = 0;
+		tree = {};
+		num_nodes = {};
 
 		/******************************************************************************
 		push empty pointer into tree, add 1 to number of nodes, and allocate memory
@@ -1224,6 +1252,7 @@ public:
 
 	bool run(int verbose)
 	{
+		if (!clear_memory(verbose)) return false;
 		if (!set_cuda_devices(verbose)) return false;
 		if (!check_input_params(verbose)) return false;
 		if (!calculate_derived_params(verbose)) return false;

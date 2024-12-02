@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
 
 Please provide credit to Luke Weisenbach should this code be used.
 Email: weisluke@alum.mit.edu

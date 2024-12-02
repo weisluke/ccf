@@ -144,7 +144,7 @@ private:
 
 
 
-	bool set_cuda_devices(bool verbose)
+	bool set_cuda_devices(int verbose)
 	{
 		/******************************************************************************
 		check that a CUDA capable device is present
@@ -186,7 +186,7 @@ private:
 		return true;
 	}
 
-	bool check_input_params(bool verbose)
+	bool check_input_params(int verbose)
 	{
 		std::cout << "Checking input parameters...\n";
 
@@ -316,7 +316,7 @@ private:
 		return true;
 	}
 	
-	bool calculate_derived_params(bool verbose)
+	bool calculate_derived_params(int verbose)
 	{
 		std::cout << "Calculating derived parameters...\n";
 		stopwatch.start();
@@ -466,7 +466,7 @@ private:
 		return true;
 	}
 
-	bool allocate_initialize_memory(bool verbose)
+	bool allocate_initialize_memory(int verbose)
 	{
 		std::cout << "Allocating memory...\n";
 		stopwatch.start();
@@ -569,7 +569,7 @@ private:
 		return true;
 	}
 
-	bool populate_star_array(bool verbose)
+	bool populate_star_array(int verbose)
 	{
 		/******************************************************************************
 		BEGIN populating star array
@@ -699,7 +699,7 @@ private:
 		return true;
 	}
 
-	bool create_tree(bool verbose)
+	bool create_tree(int verbose)
 	{
 		/******************************************************************************
 		BEGIN create root node, then create children and sort stars
@@ -867,7 +867,7 @@ private:
 		return true;
 	}
 
-	bool find_initial_roots(bool verbose)
+	bool find_initial_roots(int verbose)
 	{
 		/******************************************************************************
 		number of iterations to use for root finding
@@ -895,7 +895,7 @@ private:
 			/******************************************************************************
 			display percentage done
 			******************************************************************************/
-			print_progress(i, num_iters - 1);
+			print_progress(verbose, i, num_iters - 1);
 
 			find_critical_curve_roots_kernel<T> <<<blocks, threads>>> (kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, ccs_init, num_roots, 0, num_phi, num_branches, fin);
@@ -941,7 +941,7 @@ private:
 		return true;
 	}
 
-	bool find_ccs(bool verbose)
+	bool find_ccs(int verbose)
 	{
 		/******************************************************************************
 		reduce number of iterations needed, as roots should stay close to previous
@@ -993,7 +993,7 @@ private:
 			{
 				cudaDeviceSynchronize();
 				if (cuda_error("cudaDeviceSynchronize", false, __FILE__, __LINE__)) return false;
-				print_progress(j, num_phi / (2 * num_branches));
+				print_progress(verbose, j, num_phi / (2 * num_branches));
 			}
 		}
 		t_ccs = stopwatch.stop();
@@ -1046,7 +1046,7 @@ private:
 		return true;
 	}
 
-	bool find_caustics(bool verbose)
+	bool find_caustics(int verbose)
 	{
 		if (write_caustics)
 		{
@@ -1065,7 +1065,7 @@ private:
 		return true;
 	}
 
-	bool find_mu_length_scales(bool verbose)
+	bool find_mu_length_scales(int verbose)
 	{
 		if (write_mu_length_scales)
 		{
@@ -1084,7 +1084,7 @@ private:
 		return true;
 	}
 
-	bool write_files(bool verbose)
+	bool write_files(int verbose)
 	{
 		/******************************************************************************
 		stream for writing output files
@@ -1222,7 +1222,7 @@ private:
 
 public:
 
-	bool run(bool verbose)
+	bool run(int verbose)
 	{
 		if (!set_cuda_devices(verbose)) return false;
 		if (!check_input_params(verbose)) return false;
@@ -1238,7 +1238,7 @@ public:
 		return true;
 	}
 
-	bool save(bool verbose)
+	bool save(int verbose)
 	{
 		if (!write_files(verbose)) return false;
 

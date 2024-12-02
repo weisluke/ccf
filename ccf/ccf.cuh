@@ -1129,7 +1129,7 @@ private:
 		std::string fname;
 
 
-		std::cout << "Writing parameter info...\n";
+		print_verbose("Writing parameter info...\n", verbose, 2);
 		fname = outfile_prefix + "ccf_parameter_info.txt";
 		outfile.open(fname);
 		if (!outfile.is_open())
@@ -1188,19 +1188,21 @@ private:
 		outfile << "t_ccs " << t_ccs << "\n";
 		outfile << "t_caustics " << t_caustics << "\n";
 		outfile.close();
-		std::cout << "Done writing parameter info to file " << fname << "\n\n";
+		print_verbose("Done writing parameter info to file " << fname << "\n", verbose, 1);
+		print_verbose("\n", verbose, 2);
 
 
 		if (write_stars)
 		{
-			std::cout << "Writing star info...\n";
+			print_verbose("Writing star info...\n", verbose, 2);
 			fname = outfile_prefix + "ccf_stars" + outfile_type;
 			if (!write_star_file<T>(num_stars, rectangular, corner, theta_star, stars, fname))
 			{
 				std::cerr << "Error. Unable to write star info to file " << fname << "\n";
 				return false;
 			}
-			std::cout << "Done writing star info to file " << fname << "\n\n";
+			print_verbose("Done writing star info to file " << fname << "\n", verbose, 1);
+			print_verbose("\n", verbose, 2);
 		}
 
 
@@ -1209,14 +1211,15 @@ private:
 		******************************************************************************/
 		if (write_critical_curves)
 		{
-			std::cout << "Writing critical curve positions...\n";
+			print_verbose("Writing critical curve positions...\n", verbose, 2);
 			fname = outfile_prefix + "ccf_ccs" + outfile_type;
 			if (!write_array<Complex<T>>(ccs, num_roots * num_branches, num_phi / num_branches + 1, fname))
 			{
 				std::cerr << "Error. Unable to write ccs info to file " << fname << "\n";
 				return false;
 			}
-			std::cout << "Done writing critical curve positions to file " << fname << "\n\n";
+			print_verbose("Done writing critical curve positions to file " << fname << "\n", verbose, 1);
+			print_verbose("\n", verbose, 2);
 		}
 
 
@@ -1225,14 +1228,15 @@ private:
 		******************************************************************************/
 		if (write_caustics)
 		{
-			std::cout << "Writing caustic positions...\n";
+			print_verbose("Writing caustic positions...\n", verbose, 2);
 			fname = outfile_prefix + "ccf_caustics" + outfile_type;
 			if (!write_array<Complex<T>>(caustics, num_roots * num_branches, num_phi / num_branches + 1, fname))
 			{
 				std::cerr << "Error. Unable to write caustic info to file " << fname << "\n";
 				return false;
 			}
-			std::cout << "Done writing caustic positions to file " << fname << "\n\n";
+			print_verbose("Done writing caustic positions to file " << fname << "\n", verbose, 1);
+			print_verbose("\n", verbose, 2);
 		}
 
 		if (write_mu_length_scales)
@@ -1240,14 +1244,14 @@ private:
 			/******************************************************************************
 			write caustic strengths
 			******************************************************************************/
-			std::cout << "Writing magnification length scales...\n";
+			print_verbose("Writing magnification length scales...\n", verbose, 2);
 			fname = outfile_prefix + "ccf_mu_length_scales" + outfile_type;
 			if (!write_array<T>(mu_length_scales, num_roots * num_branches, num_phi / num_branches + 1, fname))
 			{
 				std::cerr << "Error. Unable to write magnification length scales info to file " << fname << "\n";
 				return false;
 			}
-			std::cout << "Done writing magnification length scales to file " << fname << "\n\n";
+			print_verbose("Done writing magnification length scales to file " << fname << "\n", verbose, 1);
 		}
 
 		return true;

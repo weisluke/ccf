@@ -58,7 +58,7 @@ public:
 	int write_stars = 1;
 	int write_critical_curves = 1;
 	int write_caustics = 1;
-	int write_mu_length_scales = 1;
+	int write_mu_length_scales = 0;
 	std::string outfile_prefix = "./";
 
 
@@ -347,7 +347,7 @@ private:
 	
 	bool calculate_derived_params(int verbose)
 	{
-		std::cout << "Calculating derived parameters...\n";
+		print_verbose("Calculating derived parameters...\n", verbose, 3);
 		stopwatch.start();
 
 		/******************************************************************************
@@ -382,7 +382,7 @@ private:
 		******************************************************************************/
 		else
 		{
-			std::cout << "Calculating some parameter values based on star input file " << starfile << "\n";
+			print_verbose("Calculating some parameter values based on star input file " << starfile << "\n", verbose, 3);
 
 			if (!read_star_file<T>(num_stars, rectangular, corner, theta_star, stars,
 				kappa_star, m_lower, m_upper, mean_mass, mean_mass2, mean_mass2_ln_mass, starfile))
@@ -406,7 +406,7 @@ private:
 			set_param("mean_mass2", mean_mass2, mean_mass2, verbose);
 			set_param("mean_mass2_ln_mass", mean_mass2_ln_mass, mean_mass2_ln_mass, verbose);
 
-			std::cout << "Done calculating some parameter values based on star input file " << starfile << "\n";
+			print_verbose("Done calculating some parameter values based on star input file " << starfile << "\n", verbose, 3);
 		}
 
 		/******************************************************************************
@@ -435,7 +435,8 @@ private:
 			}
 		}
 
-		alpha_error = theta_star * static_cast<T>(0.0000001); //error is 10^-7 einstein radii
+		//error is 10^-7 einstein radii
+		set_param("alpha_error", alpha_error, theta_star * 0.0000001, verbose, !(rectangular && approx) && verbose < 3);
 
 		taylor_smooth = 1;
 		while ((kappa_star * std::numbers::inv_pi_v<T> * 4 / (taylor_smooth + 1) * corner.abs() * (safety_scale + 1) / (safety_scale - 1)
@@ -455,7 +456,7 @@ private:
 		{
 			taylor_smooth += 2;
 		}		
-		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose && rectangular && approx);
+		set_param("taylor_smooth", taylor_smooth, taylor_smooth, verbose * (rectangular && approx), verbose < 3);
 		if (rectangular && taylor_smooth > MAX_TAYLOR_SMOOTH)
 		{
 			std::cerr << "Error. taylor_smooth must be <= " << MAX_TAYLOR_SMOOTH << "\n";
@@ -490,7 +491,7 @@ private:
 		}
 
 		t_elapsed = stopwatch.stop();
-		std::cout << "Done calculating derived parameters. Elapsed time: " << t_elapsed << " seconds.\n\n";
+		print_verbose("Done calculating derived parameters. Elapsed time: " << t_elapsed << " seconds.\n\n", verbose, 3);
 
 		return true;
 	}
@@ -706,7 +707,7 @@ private:
 		/******************************************************************************
 		initialize roots for centers of all branches to lie at starpos +/- 1
 		******************************************************************************/
-		print_verbose("Initializing root positions...\n", verbose);
+		print_verbose("Initializing root positions...\n", verbose, 3);
 		for (int j = 0; j < num_branches; j++)
 		{
 			int center = (num_phi / (2 * num_branches) + j * num_phi / num_branches + j) * num_roots;
@@ -723,7 +724,7 @@ private:
 								std::sin(2 * std::numbers::pi_v<T> / nroots_extra * i));
 			}
 		}
-		print_verbose("Done initializing root positions.\n\n", verbose);
+		print_verbose("Done initializing root positions.\n\n", verbose, 3);
 
 		return true;
 	}
@@ -826,7 +827,8 @@ private:
 				if (cuda_error("set_neighbors_kernel", true, __FILE__, __LINE__)) return false;
 			}
 		} while (*max_num_stars_in_level > treenode::MAX_NUM_STARS_DIRECT);
-		set_param("tree_levels", tree_levels, tree_levels, verbose);
+		print_verbose("\n", verbose, 3);
+		set_param("tree_levels", tree_levels, tree_levels, verbose, verbose > 2);
 
 		t_elapsed = stopwatch.stop();
 		print_verbose("Done creating children and sorting stars. Elapsed time: " << t_elapsed << " seconds.\n\n", verbose, 1);
@@ -915,7 +917,7 @@ private:
 		/******************************************************************************
 		begin finding initial roots and calculate time taken in seconds
 		******************************************************************************/
-		std::cout << "Finding initial roots...\n";
+		print_verbose("Finding initial roots...\n", verbose, 1);
 		stopwatch.start();
 
 		/******************************************************************************
@@ -936,7 +938,7 @@ private:
 			if (cuda_error("find_critical_curve_roots_kernel", true, __FILE__, __LINE__)) return false;
 		}
 		t_init_roots = stopwatch.stop();
-		std::cout << "\nDone finding roots. Elapsed time: " << t_init_roots << " seconds.\n";
+		print_verbose("\nDone finding initial roots. Elapsed time: " << t_init_roots << " seconds.\n", verbose, 1);
 
 
 		/******************************************************************************
@@ -950,7 +952,7 @@ private:
 		set_threads(threads, 512);
 		set_blocks(threads, blocks, (num_phi + num_branches) * num_roots);
 
-		print_verbose("Calculating maximum errors in 1/mu...\n", verbose);
+		print_verbose("Calculating maximum error in 1/mu...\n", verbose, 3);
 		find_errors_kernel<T> <<<blocks, threads>>> (ccs_init, num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 			rectangular, corner, approx, taylor_smooth, 0, num_phi, num_branches, errs);
 		if (cuda_error("find_errors_kernel", false, __FILE__, __LINE__)) return false;
@@ -968,8 +970,7 @@ private:
 		find max error and print
 		******************************************************************************/
 		max_error = *thrust::max_element(thrust::device, errs, errs + (num_phi + num_branches) * num_roots);
-		print_verbose("Done calculating maximum errors in 1/mu.\n", verbose);
-		std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
+		print_verbose("Maximum error in 1/mu: " << max_error << "\n\n", verbose, 1);
 
 
 		return true;
@@ -989,7 +990,7 @@ private:
 		/******************************************************************************
 		begin finding critical curves and calculate time taken in seconds
 		******************************************************************************/
-		std::cout << "Finding critical curve positions...\n";
+		print_verbose("Finding critical curve positions...\n", verbose, 1);
 		stopwatch.start();
 
 		/******************************************************************************
@@ -1031,7 +1032,8 @@ private:
 			}
 		}
 		t_ccs = stopwatch.stop();
-		std::cout << "\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n\n";
+		print_verbose("\nDone finding critical curve positions. Elapsed time: " << t_ccs << " seconds.\n", verbose, 1);
+		print_verbose("\n", verbose, 3);
 
 
 		/******************************************************************************
@@ -1045,7 +1047,7 @@ private:
 		set_threads(threads, 512);
 		set_blocks(threads, blocks, (num_phi + num_branches) * num_roots);
 
-		std::cout << "Finding maximum error in 1/mu over all calculated critical curve positions...\n";
+		print_verbose("Finding maximum error in 1/mu over all calculated critical curve positions...\n", verbose, 3);
 
 		for (int j = 0; j <= num_phi / (2 * num_branches); j++)
 		{
@@ -1064,18 +1066,18 @@ private:
 		}
 
 		max_error = *thrust::max_element(thrust::device, errs, errs + (num_phi + num_branches) * num_roots);
-		std::cout << "Maximum error in 1/mu: " << max_error << "\n\n";
+		print_verbose("Maximum error in 1/mu: " << max_error << "\n\n", verbose, 1);
 
 
 		set_threads(threads, 512);
 		set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
-		print_verbose("Transposing critical curve array...\n", verbose);
+		print_verbose("Transposing critical curve array...\n", verbose, 3);
 		stopwatch.start();
 		transpose_array_kernel<Complex<T>> <<<blocks, threads>>> (ccs_init, (num_phi + num_branches), num_roots, ccs);
 		if (cuda_error("transpose_array_kernel", true, __FILE__, __LINE__)) return false;
 		t_elapsed = stopwatch.stop();
-		print_verbose("Done transposing critical curve array. Elapsed time: " + std::to_string(t_elapsed) + " seconds.\n\n", verbose);
+		print_verbose("Done transposing critical curve array. Elapsed time: " << t_elapsed << " seconds.\n\n", verbose, 3);
 
 		return true;
 	}
@@ -1087,13 +1089,13 @@ private:
 			set_threads(threads, 256);
 			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
-			std::cout << "Finding caustic positions...\n";
+			print_verbose("Finding caustic positions...\n", verbose, 2);
 			stopwatch.start();
 			find_caustics_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, caustics);
 			if (cuda_error("find_caustics_kernel", true, __FILE__, __LINE__)) return false;
 			t_caustics = stopwatch.stop();
-			std::cout << "Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n";
+			print_verbose("Done finding caustic positions. Elapsed time: " << t_caustics << " seconds.\n\n", verbose, 2);
 		}
 
 		return true;
@@ -1106,13 +1108,13 @@ private:
 			set_threads(threads, 256);
 			set_blocks(threads, blocks, num_roots * (num_phi + num_branches));
 
-			std::cout << "Finding magnification length scales...\n";
+			print_verbose("Finding magnification length scales...\n", verbose, 2);
 			stopwatch.start();
 			find_mu_length_scales_kernel<T> <<<blocks, threads>>> (ccs, (num_phi + num_branches) * num_roots, kappa_tot, shear, theta_star, stars, kappa_star, tree[0],
 				rectangular, corner, approx, taylor_smooth, mu_length_scales);
 			if (cuda_error("find_mu_length_scales_kernel", true, __FILE__, __LINE__)) return false;
 			t_elapsed = stopwatch.stop();
-			std::cout << "Done finding magnification length scales. Elapsed time: " << t_elapsed << " seconds.\n\n";
+			print_verbose("Done finding magnification length scales. Elapsed time: " << t_elapsed << " seconds.\n\n", verbose, 2);
 		}
 
 		return true;
@@ -1189,7 +1191,7 @@ private:
 		outfile << "t_caustics " << t_caustics << "\n";
 		outfile.close();
 		print_verbose("Done writing parameter info to file " << fname << "\n", verbose, 1);
-		print_verbose("\n", verbose, 2);
+		print_verbose("\n", verbose * (write_stars || write_critical_curves || write_caustics || write_mu_length_scales), 2);
 
 
 		if (write_stars)
@@ -1202,7 +1204,7 @@ private:
 				return false;
 			}
 			print_verbose("Done writing star info to file " << fname << "\n", verbose, 1);
-			print_verbose("\n", verbose, 2);
+			print_verbose("\n", verbose * (write_critical_curves || write_caustics || write_mu_length_scales), 2);
 		}
 
 
@@ -1219,7 +1221,7 @@ private:
 				return false;
 			}
 			print_verbose("Done writing critical curve positions to file " << fname << "\n", verbose, 1);
-			print_verbose("\n", verbose, 2);
+			print_verbose("\n", verbose * (write_caustics || write_mu_length_scales), 2);
 		}
 
 
@@ -1236,7 +1238,7 @@ private:
 				return false;
 			}
 			print_verbose("Done writing caustic positions to file " << fname << "\n", verbose, 1);
-			print_verbose("\n", verbose, 2);
+			print_verbose("\n", verbose * write_mu_length_scales, 2);
 		}
 
 		if (write_mu_length_scales)

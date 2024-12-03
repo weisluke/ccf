@@ -1,1 +1,1 @@
-nvcc -std=c++20 --use_fast_math -O3 -D is_double -o ccf_gpu ./ccf/main.cu
+nvcc -std=c++20 --use_fast_math -I ./include -O3 -D is_double -o ccf_gpu ./src/main.cu

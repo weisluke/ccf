@@ -7,6 +7,8 @@
 #include "star.cuh"
 #include "tree_node.cuh"
 
+#include <numbers>
+
 
 /******************************************************************************
 lens equation from image plane to source plane
@@ -333,14 +335,13 @@ __global__ void find_critical_curve_roots_kernel(T kappa, T gamma, T theta, star
 	T norm;
 	int sgn;
 
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
+	T dphi = 2 * std::numbers::pi_v<T> / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)
 	{
 		for (int b = y_index; b < 2; b += y_stride)
 		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
+			T phi0 = std::numbers::pi_v<T> / nbranches + c * 2 * std::numbers::pi_v<T> / nbranches;
 
 			for (int a = x_index; a < nroots; a += x_stride)
 			{
@@ -430,14 +431,13 @@ __global__ void find_errors_kernel(Complex<T>* z, int nroots, T kappa, T gamma, 
 
 	int sgn;
 
-	T PI = static_cast<T>(3.1415926535898);
-	T dphi = 2 * PI / nphi * j;
+	T dphi = 2 * std::numbers::pi_v<T> / nphi * j;
 
 	for (int c = z_index; c < nbranches; c += z_stride)
 	{
 		for (int b = y_index; b < 2; b += y_stride)
 		{
-			T phi0 = PI / nbranches + c * 2 * PI / nbranches;
+			T phi0 = std::numbers::pi_v<T> / nbranches + c * 2 * std::numbers::pi_v<T> / nbranches;
 
 			for (int a = x_index; a < nroots; a += x_stride)
 			{
